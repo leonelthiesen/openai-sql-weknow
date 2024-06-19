@@ -6,7 +6,18 @@
     "start": "node src/index.js"
   },
   "author": "Leonel Thiesen",
+  "type": "module",
   "dependencies": {
-    "openai": "^4.51.0"
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2",
+    "node-sql-parser": "^5.2.0",
+    "openai": "^4.51.0",
+    "postgres": "^3.4.4",
+    "puppeteer-core": "^22.11.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.5.0",
+    "eslint": "^9.5.0",
+    "globals": "^15.6.0"
   }
 }
