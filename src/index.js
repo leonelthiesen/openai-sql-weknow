@@ -23,34 +23,74 @@ await main();
 // console.log(process._getActiveHandles());
 // console.log(process._getActiveRequests());
 
-async function main() {
-    let auth = await authenticate(process.env.WEKNOW_USER_NAME, process.env.WEKNOW_PASSWORD, process.env.WEKNOW_CLIENT_TYPE, process.env.WEKNOW_ACCOUNT_TOKEN);
+async function main() {    
+    let auth;
+    try {
+        auth = await authenticate(process.env.WEKNOW_USER_NAME, process.env.WEKNOW_PASSWORD, process.env.WEKNOW_CLIENT_TYPE, process.env.WEKNOW_ACCOUNT_TOKEN);
+    } catch (error) {
+        exit(error);
+        return;
+    }
+    if (auth && auth.error) {
+        exit(auth.error);
+        return;
+    }
 
+    if (auth) {
+        await processMessages(auth);    
+    }
+}
+
+async function processMessages(auth) {
+    console.log('Processing messages...');
     for (let userMessage of userTestMessages) {
+        console.log('Processing message:', userMessage);
+        console.log('Getting metadata summary...');
         let metadataSummary = await getMetadataSummary(userMessage.metadataId, auth.accessToken);
-        let fields = convertTreeViewInList(metadataSummary.fields);
+        let fields = convertTreeViewInList(metadataSummary.fields || []);
         let completeNameOptions = fields.map((field) => field.completeName);
         let completeNameOptionsList = completeNameOptions.join('\n');
         let systemMessage = SYSTEM_MESSAGE + completeNameOptionsList;
 
+        console.log('Getting chat completion...');
         let completionSql = await getChatCompletion(systemMessage, userMessage.message);
+        
+        console.log('Parsing SQL...');
         let ast = parseSql(completionSql);
+        
+        console.log('Creating Weknow grid config...');
         let weknowGridConfig = createWeknowGridConfigFromAst(userMessage.metadataId, ast);
+
+        console.log('Executing Weknow component...');
         let executionResults = await executeComponent(weknowGridConfig, auth.accessToken);
 
-        let gridBinaryScreenshot = await renderWeknowComponent(weknowGridConfig, executionResults);
+        console.log('Rendering Weknow component...');
+        let gridBinaryScreenshot = null;
+        try {
+            gridBinaryScreenshot = await renderWeknowComponent(weknowGridConfig, executionResults);            
+        } catch (error) {
+            console.log(error);            
+        }
 
+        console.log('Saving chat completion results...');
         await saveChatCompletionResults({
             systemMessage: systemMessage,
             userMessage: userMessage.message,
             completion: completionSql,
             gridResult: gridBinaryScreenshot
         });
+        console.log('Finished processing message:', userMessage);
     }
+    console.log('Finished processing messages.');
 
+    exit();
+}
+
+function exit(error) {
+    if (error) {
+        console.log(error);
+    }
     sql.end();
-
-    return;
 }
 
 function convertTreeViewInList (treeView) {
@@ -91,19 +131,81 @@ function parseSql (sqlString) {
 }
 
 function createWeknowGridConfigFromAst (metadataId, sqlAst) {
-    let firstStatement = sqlAst[0];
-    if (firstStatement.type !== 'select' || !firstStatement.columns || firstStatement.columns.length === 0) {
+    let statement = sqlAst[0];
+    if (!Array.isArray(sqlAst)) {
+        statement = sqlAst;
+    }
+
+    if (statement.type !== 'select' || !statement.columns || statement.columns.length === 0) {
         return null;
     }
 
     let weknowGridConfig = structuredClone(baseGridConfig);
     weknowGridConfig.data.metadataId = metadataId;
 
-    weknowGridConfig.data.columns = firstStatement.columns.map((column) => {
-        return {
-            completeName: column.expr.column,
-            title: column.as || column.expr.column
-        };
+    weknowGridConfig.data.columns = [];
+    let calculatedFieldsCount = 0;
+    statement.columns.forEach((column) => {
+        let completeName = column.expr.column;
+        let title = column.as || column.expr.column;
+
+        if (column.expr.type !== 'column_ref') {
+            calculatedFieldsCount++;
+            function convertColumnRef (object) {
+                if (object.type === 'column_ref') {
+                    object.column = `%${object.column}%`;
+                }
+                for (let key in object) {
+                    if (typeof object[key] === 'object' && object[key] !== null) {
+                        convertColumnRef(object[key]);
+                    }
+                }
+            }
+
+            convertColumnRef(column.expr);
+
+            const DataTypes = {
+                X: 1
+            };
+
+            const FieldTypes = {
+                X: 1
+            };
+
+            const CalculatedFieldTypes = {
+                X: 2
+            };
+
+            let sqlParser = new Parser();
+            const columnSqlText = sqlParser.exprToSQL(column.expr);
+            
+            completeName = 'calculatedField' + calculatedFieldsCount;
+            
+            if (title === undefined) {
+                title = completeName;
+            }
+
+            let calculatedField = {
+                completeName: completeName,
+                dataType: DataTypes.X,
+                fieldTipe: FieldTypes.X,
+                formula: columnSqlText,
+                hasAggregateFunction: true, // TODO: pegar do ast?
+                isAggregated: true, // TODO: pegar do ast?
+                isMeasure: true, //TODO: pegar do ast? 
+                title: title,
+                type: CalculatedFieldTypes.X
+            };
+            if (!weknowGridConfig.data.calculatedFields) {
+                weknowGridConfig.data.calculatedFields = [];
+            }
+            weknowGridConfig.data.calculatedFields.push(calculatedField);
+        }
+        
+        weknowGridConfig.data.columns.push({
+            completeName,
+            title
+        });
     });
 
     return weknowGridConfig;
