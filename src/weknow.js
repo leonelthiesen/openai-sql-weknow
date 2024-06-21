@@ -1,10 +1,14 @@
+/* global window */
+
 import fetch from 'node-fetch';
 import crypto from 'crypto';
+import puppeteer from 'puppeteer-core';
+import { ObjectTypes } from './constants.js';
 
 let metadataSummaryCache = {};
 
 function getUrl(path) {
-    return `http://${process.env.WEKNOW_API_HOST | 'localhost'}/weknow/datasnap/rest/${path}`;
+    return `http://${process.env.WEKNOW_API_HOST || 'localhost'}/weknow/datasnap/rest/${path}`;
 }
 
 export async function authenticate(userName, password, clientAppType, accountToken) {
@@ -51,4 +55,63 @@ export async function executeComponent(contents, accessToken) {
         headers: { 'Content-Type': 'application/json' }
     });
     return response.json();
+}
+
+export async function renderComponent (config, data) {
+    const browser = await puppeteer.launch({
+        executablePath: process.env.CHROME_EXECUTABLE_PATH,
+        // headless: false,
+        // devtools: true,
+        // args:[
+        //     '--start-maximized'
+        // ]
+    });
+
+    const page = await browser.newPage();
+
+    await page.evaluateOnNewDocument((accountToken) => {
+        if (!window.wknw) {
+            window.wknw = {
+                requestStartValues: function () {
+                    window.wknwweb.setStartValues({
+                        accountToken,
+                        accessToken: 'testToken'
+                    })
+                },
+                allComponentsLoaded: function () {
+                    console.log('allComponentsLoaded');
+                }
+            };
+        }
+    }, process.env.WEKNOW_ACCOUNT_TOKEN);
+
+    await page.goto(`http://${process.env.WEKNOW_API_HOST || 'localhost'}/#/desktopstart`);
+    await page.goto(`http://${process.env.WEKNOW_API_HOST || 'localhost'}/#/objectViewer`);
+    await page.evaluate((config, data) => {
+        window.wknwweb.setObjectContents(config)
+        window.wknwweb.setObjectData(data)
+
+    }, config, data);
+
+    await page.evaluate((config, data) => {
+        window.wknwweb.setObjectContents(config)
+        window.wknwweb.setObjectData(data)
+    }, config, data);
+
+    if (config.type === ObjectTypes.Table) {
+        await page.waitForSelector('.dx-datagrid, .component-load-error', { visible: true });
+    } else if (config.type === ObjectTypes.Chart) {
+        await page.waitForSelector('.highcharts-container, .component-load-error', { visible: true });
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const binaryScreenshot = await page.screenshot({
+        encoding: 'binary',
+        type: 'png',
+    });
+
+    await browser.close();
+
+    return binaryScreenshot;
 }
