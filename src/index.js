@@ -1,16 +1,15 @@
 import 'dotenv/config';
 import OpenAI from 'openai';
-import { SYSTEM_MESSAGE, baseGridConfig } from './constants.js';
+import { SYSTEM_MESSAGE } from './constants.js';
 import process from 'process';
 import sql from './db.js'
 import * as weknow from './weknow.js';
 import { createRequire } from "module";
+import { createWeknowGridConfigFromSql } from './astToWeknowConfig.js';
 const require = createRequire(import.meta.url);
 const userTestMessages = require("../data/user-test-messages.json");
 
-const { Parser } = require('node-sql-parser');
-
-let models = {
+const OpenAiModels = {
     gpt4: "gpt-4",
     gpt35Turbo: "gpt-3.5-turbo",
 };
@@ -52,11 +51,8 @@ async function processMessages(auth) {
         console.log('Getting chat completion...');
         let completionSql = await getChatCompletion(systemMessage, userMessage.message);
 
-        console.log('Parsing SQL...');
-        let ast = parseSql(completionSql);
-
         console.log('Creating Weknow grid config...');
-        let weknowGridConfig = createWeknowGridConfigFromAst(userMessage.metadataId, ast);
+        let { weknowGridConfig, ast } = createWeknowGridConfigFromSql(userMessage.metadataId, completionSql);
 
         console.log('Executing Weknow component...');
         let error = null;
@@ -78,8 +74,9 @@ async function processMessages(auth) {
             systemMessage: systemMessage,
             userMessage: userMessage.message,
             completion: completionSql,
-            gridResult: gridBinaryScreenshot,
+            ast: JSON.stringify(ast),
             weknowGridConfig: JSON.stringify(weknowGridConfig),
+            gridResult: gridBinaryScreenshot,
             error: error ? JSON.stringify(error) : null
         });
         console.log('Finished processing message:', userMessage);
@@ -116,102 +113,15 @@ function convertTreeViewInList (treeView) {
     return tempFieldList;
 }
 
-async function saveChatCompletionResults({ systemMessage, userMessage, completion, gridResult, weknowGridConfig, error }) {
+async function saveChatCompletionResults({ systemMessage, userMessage, completion, ast, weknowGridConfig, gridResult, error }) {
     const chatCompletions = await sql`
         insert into chat_completions
-            (system_message, user_message, completion, grid_result, weknow_grid_config, error)
+            (system_message, user_message, completion, ast, weknow_grid_config, grid_result, error)
         values
-            (${ systemMessage }, ${ userMessage }, ${ completion }, ${ gridResult }, ${ weknowGridConfig }, ${ error })
-        returning system_message, user_message, completion, grid_result, weknow_grid_config, error
+            (${ systemMessage }, ${ userMessage }, ${ completion }, ${ast}, ${ weknowGridConfig }, ${ gridResult }, ${ error })
+        returning system_message, user_message, completion, ast, weknow_grid_config, grid_result, error
     `;
     return chatCompletions;
-}
-
-function parseSql (sqlString) {
-    let sqlParser = new Parser();
-    const ast = sqlParser.astify(sqlString);
-    return ast;
-}
-
-function createWeknowGridConfigFromAst (metadataId, sqlAst) {
-    let statement = sqlAst[0];
-    if (!Array.isArray(sqlAst)) {
-        statement = sqlAst;
-    }
-
-    if (statement.type !== 'select' || !statement.columns || statement.columns.length === 0) {
-        return null;
-    }
-
-    let weknowGridConfig = structuredClone(baseGridConfig);
-    weknowGridConfig.data.metadataId = metadataId;
-
-    weknowGridConfig.data.columns = [];
-    let calculatedFieldsCount = 0;
-    statement.columns.forEach((column) => {
-        let completeName = column.expr.column;
-        let title = column.as || column.expr.column;
-
-        if (column.expr.type !== 'column_ref') {
-            calculatedFieldsCount++;
-            function convertColumnRef (object) {
-                if (object.type === 'column_ref') {
-                    object.column = `%${object.column}%`;
-                }
-                for (let key in object) {
-                    if (typeof object[key] === 'object' && object[key] !== null) {
-                        convertColumnRef(object[key]);
-                    }
-                }
-            }
-
-            convertColumnRef(column.expr);
-
-            const DataTypes = {
-                X: 1
-            };
-
-            const FieldTypes = {
-                X: 1
-            };
-
-            const CalculatedFieldTypes = {
-                X: 2
-            };
-
-            let sqlParser = new Parser();
-            let columnSqlText = sqlParser.exprToSQL(column.expr).replace(/`/g, '');
-
-            completeName = 'calculatedField' + calculatedFieldsCount;
-
-            if (title === undefined) {
-                title = completeName;
-            }
-
-            let calculatedField = {
-                completeName: completeName,
-                dataType: DataTypes.X,
-                fieldTipe: FieldTypes.X,
-                formula: columnSqlText,
-                hasAggregateFunction: true, // TODO: pegar do ast?
-                isAggregated: true, // TODO: pegar do ast?
-                isMeasure: true, //TODO: pegar do ast?
-                title: title,
-                type: CalculatedFieldTypes.X
-            };
-            if (!weknowGridConfig.data.calculatedFields) {
-                weknowGridConfig.data.calculatedFields = [];
-            }
-            weknowGridConfig.data.calculatedFields.push(calculatedField);
-        }
-
-        weknowGridConfig.data.columns.push({
-            completeName,
-            title
-        });
-    });
-
-    return weknowGridConfig;
 }
 
 async function getChatCompletion (systemMessage, userMessage) {
@@ -219,7 +129,7 @@ async function getChatCompletion (systemMessage, userMessage) {
         apiKey: process.env.OPENAI_API_KEY
     });
     const chatCompletion = await openai.chat.completions.create({
-        model: models.gpt35Turbo,
+        model: OpenAiModels.gpt35Turbo,
         messages: [{
             role: "system",
             content: systemMessage

@@ -11,8 +11,8 @@ export const TEST_SQL = `SELECT
                             SUM(product_unit_price * sale_item_quantity) AS total_vendas
                         FROM
                             data
-                        GROUP BY
-                            company_name
+                        WHERE
+                            uf2_uf NOT LIKE 'SC'
                         ORDER BY
                             total_vendas DESC;`;
 
