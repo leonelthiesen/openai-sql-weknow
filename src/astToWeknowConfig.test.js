@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
-import { ValidWeknowOperators, astOperatorToWeknow, createWeknowGridConfigFromSql, shouldExprCreatesCalculatedField } from './astToWeknowConfig.js'
+import { ValidWeknowOperators, astOperatorToWeknow, createWeknowConfigFromSql, shouldExprCreatesCalculatedField } from './astToWeknowConfig.js'
+import { ObjectTypes } from './constants.js';
 
 test('create grid config from sql 1 for metadataId 8 to equal ... ', () => {
     let sql = `
@@ -7,16 +8,16 @@ test('create grid config from sql 1 for metadataId 8 to equal ... ', () => {
                 company_name,
                 employee_id AS melhor_vendedor_id,
                 employee_person_id AS melhor_vendedor_person_id,
-                SUM(product_unit_price * sale_item_quantity) AS total_vendas
+                SUM(valorTotalItem) AS total_vendas
             FROM
                 data
             WHERE
                 uf2_uf NOT LIKE 'SC'
             ORDER BY
                 total_vendas DESC;`;
-    let fieldList = [ 'company_name', 'product_unit_price', 'sale_item_quantity', 'uf2_uf', 'uf2_longitude', 'person_1_name'];
-    let { weknowGridConfig } = createWeknowGridConfigFromSql(8, fieldList, sql);
-    expect(weknowGridConfig).toEqual({
+    let fieldList = [ 'company_name', 'product_unit_price', 'sale_item_quantity', 'uf2_uf', 'uf2_longitude', 'person_1_name', 'valorTotalItem'];
+    let { weknowConfig } = createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
+    expect(weknowConfig).toEqual({
         type: 3,
         viewAllowed: true,
         title: {
@@ -46,27 +47,15 @@ test('create grid config from sql 1 for metadataId 8 to equal ... ', () => {
                     title: "melhor_vendedor_person_id"
                 },
                 {
-                    completeName: "calculatedField1",
-                    title: "total_vendas"
+                    completeName: "valorTotalItem",
+                    title: "total_vendas",
+                    measureFunction: 3
                 }
             ],
             style: {},
-            calculatedFields: [
-                {
-                    completeName: "calculatedField1",
-                    dataType: 1,
-                    fieldTipe: 1,
-                    formula: "SUM(%product_unit_price% * %sale_item_quantity%)",
-                    hasAggregateFunction: true,
-                    isAggregated: true,
-                    isMeasure: true,
-                    title: "total_vendas",
-                    type: 2
-                }
-            ],
             sort: [
                 {
-                    completeName: "calculatedField1",
+                    completeName: "valorTotalItem",
                     direction: 1
                 }
             ],
@@ -105,8 +94,8 @@ test('create grid config from sql 2 for metadataId 8 to equal ... ', () => {
                 total_vendas DESC;`;
     let fieldList = [ 'company_name', 'product_unit_price', 'sale_item_quantity', 'uf2_uf', 'uf2_longitude', 'person_1_name'];
 
-    let { weknowGridConfig } = createWeknowGridConfigFromSql(8, fieldList, sql);
-    expect(weknowGridConfig).toEqual({
+    let { weknowConfig } = createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
+    expect(weknowConfig).toEqual({
         type: 3,
         viewAllowed: true,
         title: {
@@ -191,8 +180,8 @@ test('create grid config from sql 2 for metadataId 8 to equal ... ', () => {
 test('create grid config from sql 3 with * for metadataId 8 to equal ... ', () => {
     let sql = `SELECT * FROM data WHERE uf2_uf NOT LIKE 'SC'`;
     let fieldList = [ 'company_name', 'product_unit_price', 'sale_item_quantity', 'uf2_uf'];
-    let { weknowGridConfig } = createWeknowGridConfigFromSql(8, fieldList, sql);
-    expect(weknowGridConfig).toEqual({
+    let { weknowConfig } = createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
+    expect(weknowConfig).toEqual({
         type: 3,
         viewAllowed: true,
         title: {

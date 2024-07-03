@@ -1,13 +1,14 @@
 import 'dotenv/config';
 import OpenAI from 'openai';
-import { SYSTEM_MESSAGE } from './constants.js';
+import { ObjectTypes, SYSTEM_MESSAGE } from './constants.js';
 import process from 'process';
 import sql from './db.js'
 import * as weknow from './weknow.js';
 import { createRequire } from "module";
-import { createWeknowGridConfigFromSql } from './astToWeknowConfig.js';
+import { createWeknowConfigFromSql } from './astToWeknowConfig.js';
 const require = createRequire(import.meta.url);
 const userTestMessages = require("../data/user-test-messages.json");
+import { parseArgs } from 'node:util';
 
 const OpenAiModels = {
     gpt4: "gpt-4",
@@ -32,8 +33,21 @@ async function main() {
         return;
     }
 
+    const options = {
+        'msg': {
+            type: 'string',
+            short: 'm',
+        }
+    };
+
+    const { values } = parseArgs({ options, tokens: true });
+    let userMessage = userTestMessages[0];
+    if (values.msg) {
+        userMessage = values.msg
+    }
+
     if (auth) {
-        await processMessage(userTestMessages[0], auth);
+        await processMessage(userMessage, auth);
     }
     exit();
 }
@@ -41,41 +55,42 @@ async function main() {
 async function processMessage(userMessage, auth) {
     console.log('Processing message:', userMessage);
     console.log('Getting metadata summary...');
-    let metadataSummary = await weknow.getMetadataSummary(process.env.METADATA_ID, auth.accessToken);
+    let metadataId = process.env.METADATA_ID;
+    let metadataSummary = await weknow.getMetadataSummary(metadataId, auth.accessToken);
     let fields = convertTreeViewInList(metadataSummary.fields || []);
     let completeNameList = fields.map((field) => field.completeName);
     let completeNameStringList = completeNameList.join('\n');
     let systemMessage = SYSTEM_MESSAGE + completeNameStringList;
 
     console.log('Getting chat completion...');
-    let completionSql = await getChatCompletion(systemMessage, userMessage.message);
+    let completionSql = await getChatCompletion(systemMessage, userMessage);
 
-    console.log('Creating Weknow grid config...');
-    let { weknowGridConfig, ast } = createWeknowGridConfigFromSql(userMessage.metadataId, completeNameList, completionSql);
+    console.log('Creating Weknow config...');
+    let { weknowConfig, ast } = createWeknowConfigFromSql(metadataId, ObjectTypes.Chart, completeNameList, completionSql);
 
     console.log('Executing Weknow component...');
     let error = null;
-    let executionResults = await weknow.executeComponent(weknowGridConfig, auth.accessToken);
+    let executionResults = await weknow.executeComponent(weknowConfig, auth.accessToken);
     if (executionResults.error) {
         error = executionResults;
     }
 
     console.log('Rendering Weknow component...');
-    let gridBinaryScreenshot = null;
+    let renderScreenshot = null;
     try {
-        gridBinaryScreenshot = await weknow.renderComponent(weknowGridConfig, executionResults);
+        renderScreenshot = await weknow.renderComponent(weknowConfig, executionResults);
     } catch (error) {
         console.log(error);
     }
 
     console.log('Saving chat completion results...');
     await saveChatCompletionResults({
-        systemMessage: systemMessage,
-        userMessage: userMessage.message,
+        systemMessage,
+        userMessage,
         completion: completionSql,
         ast: JSON.stringify(ast),
-        weknowGridConfig: JSON.stringify(weknowGridConfig),
-        gridResult: gridBinaryScreenshot,
+        weknowConfig: JSON.stringify(weknowConfig),
+        renderResult: renderScreenshot,
         error: error ? JSON.stringify(error) : null
     });
     console.log('Finished processing message:', userMessage);
@@ -112,13 +127,13 @@ function convertTreeViewInList (treeView) {
 //     return false;
 // }
 
-async function saveChatCompletionResults({ systemMessage, userMessage, completion, ast, weknowGridConfig, gridResult, error }) {
+async function saveChatCompletionResults({ systemMessage, userMessage, completion, ast, weknowConfig, renderResult, error }) {
     const chatCompletions = await sql`
         insert into chat_completions
-            (system_message, user_message, completion, ast, weknow_grid_config, grid_result, error)
+            (system_message, user_message, completion, ast, weknow_config, render_result, error)
         values
-            (${ systemMessage }, ${ userMessage }, ${ completion }, ${ast}, ${ weknowGridConfig }, ${ gridResult }, ${ error })
-        returning system_message, user_message, completion, ast, weknow_grid_config, grid_result, error
+            (${ systemMessage }, ${ userMessage }, ${ completion }, ${ast}, ${ weknowConfig }, ${ renderResult }, ${ error })
+        returning system_message, user_message, completion, ast, weknow_config, render_result, error
     `;
     return chatCompletions;
 }

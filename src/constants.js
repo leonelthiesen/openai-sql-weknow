@@ -36,7 +36,6 @@ export const baseGridConfig = {
     data: {
         metadataId: -1,
         immediately: true,
-        // interval: 60,
         autoScroll: {
             mode: 0
         },
@@ -47,19 +46,15 @@ export const baseGridConfig = {
             enabled: false
         },
         gridBaseType: ObjectGridTypes.Monodimensional,
-        columns: [{
-            completeName: "product_name",
-            title: "product_name",
-        }],
+        columns: [],
         style: {}
     },
     style: {}
 };
 
-
 export const baseChartConfig = {
     // version: "5.0.0",
-    type: ObjectTypes.Table,
+    type: ObjectTypes.Chart,
     viewAllowed: true,
     title: {
         text: "Título"
@@ -67,71 +62,11 @@ export const baseChartConfig = {
     data: {
         metadataId: 25,
         immediately: true,
-        interval: 60,
         autoLink: {
             disableAutoLink: false
         },
-        values: [{
-            title: "CD Venda",
-            items: [{
-                completeName: "cd_venda",
-                title: "CD Venda",
-                measureFunction: 1,
-                type: 0,
-                formatOptions: {
-                    format: 1,
-                    showThousandSeparator: true,
-                    decimals: 0
-                }
-            }]
-        }],
-        labels: [{
-            title: "Categoria",
-            items: [{
-                completeName: "ds_categoria",
-                title: "Categoria"
-            }]
-        }],
-        sort: [{
-            completeName: "sale_item_id",
-            measureFunction: 1,
-            direction: 1
-        }],
-        groups: [{
-            completeName: "sale_item_packed",
-            title: "sale_item_packed"
-        }],
-        whereFilters: {
-            filters: [{
-                completeName: "company_name",
-                operator: 9,
-                values: {
-                    mode: 1,
-                    fixedValues: ["Einstein", "Xenon", "Plutonium", "Titanium", "Chromium", "Berkelium", "Vanadium", "Einsteinium", "Anycomp", "Alumen", "Fluorum", "Oxygenium", "Rubidium"]
-                }
-            }],
-            join: 0
-        },
-        havingFilters: {
-            filters: [{
-                completeName: "sale_item_id",
-                measureFunction: 1,
-                operator: 3,
-                values: {
-                    mode: 1,
-                    fixedValues: [8]
-                }
-            }],
-            join: 0
-        },
-        legend: {
-            position: 2,
-            showSymbol: true,
-            showFrame: true,
-            style: 1,
-            itemText: "%$label%",
-            selectionMode: 2
-        },
+        values: [],
+        labels: [],
         axis: {
             left: {
                 increment: 2,
@@ -203,8 +138,7 @@ export const baseChartConfig = {
             centralText: ""
         },
         autoTitle: {
-            enabled: false,
-            views: [["Título"]]
+            enabled: false
         }
     },
     style: {}

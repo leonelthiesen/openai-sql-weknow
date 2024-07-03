@@ -4,6 +4,7 @@
   "description": "",
   "scripts": {
     "start": "node src/index.js",
+    "start-sample-msg": "node src/index.js -m \"listar todos os campos da tabela\"",
     "test": "vitest"
   },
   "author": "Leonel Thiesen",

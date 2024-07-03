@@ -1,4 +1,4 @@
-import { baseGridConfig } from './constants.js';
+import { ObjectTypes, baseChartConfig, baseGridConfig } from './constants.js';
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const { Parser } = require('node-sql-parser');
@@ -58,16 +58,16 @@ const AstSortTypeToWeknow = {
 
 let astColumnIndexToCalculatedField = {};
 
-export function createWeknowGridConfigFromSql(metadataId, fieldsList, sql) {
+export function createWeknowConfigFromSql(metadataId, type, fieldsList, sql) {
     let sqlParser = new Parser();
     const ast = sqlParser.astify(sql);
     return {
         ast,
-        weknowGridConfig: createWeknowGridConfigFromAst(metadataId, fieldsList, ast)
+        weknowConfig: createWeknowConfigFromAst(metadataId, type, fieldsList, ast)
     };
 }
 
-function createWeknowGridConfigFromAst(metadataId, fieldsList, sqlAst) {
+function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
     let statement = sqlAst[0];
     if (!Array.isArray(sqlAst)) {
         statement = sqlAst;
@@ -77,10 +77,17 @@ function createWeknowGridConfigFromAst(metadataId, fieldsList, sqlAst) {
         return null;
     }
 
-    let weknowGridConfig = structuredClone(baseGridConfig);
-    weknowGridConfig.data.metadataId = metadataId;
+    let weknowConfig;
+    if (type === ObjectTypes.Chart) {
+        weknowConfig = structuredClone(baseChartConfig);
+        weknowConfig.data.values = [];
+        weknowConfig.data.labels = [];
+    } else {
+        weknowConfig = structuredClone(baseGridConfig);
+        weknowConfig.data.columns = [];
+    }
 
-    weknowGridConfig.data.columns = [];
+    weknowConfig.data.metadataId = metadataId;
 
     // Verifica se existe alguma coluna que é igual a "*", neste caso ajusta o ast para pegar todas as colunas da tabela
     let allColumnsIndex = statement.columns.findIndex((column) => column.expr.column === '*');
@@ -102,24 +109,59 @@ function createWeknowGridConfigFromAst(metadataId, fieldsList, sqlAst) {
     statement.columns.forEach((column, index) => {
         let title = column.as || column.expr.column;
 
-        let weknowColumnConfig = processAstExprToWeknow(weknowGridConfig, statement, column.expr, title, index);
-        weknowGridConfig.data.columns.push(weknowColumnConfig);
+        let weknowItemConfig = processAstExprToWeknow(weknowConfig, statement, column.expr, title, index);
+        if (type === ObjectTypes.Chart) {
+            let measureFunction = weknowItemConfig.measureFunction;
+            weknowItemConfig = {
+                items: [weknowItemConfig],
+                title: weknowItemConfig.title
+            }
+            if (measureFunction) {
+                weknowConfig.data.values.push(weknowItemConfig);
+            } else {
+                weknowConfig.data.labels.push(weknowItemConfig);
+            }
+        } else {
+            weknowConfig.data.columns.push(weknowItemConfig);
+        }
     });
 
-    if (statement.orderby) {
-        weknowGridConfig.data.sort = [];
-        statement.orderby.forEach((orderBy) => {
-            let weknowColumnConfig = processAstExprToWeknow(weknowGridConfig, statement, orderBy.expr, orderBy.as);
-
-            weknowColumnConfig.direction = AstSortTypeToWeknow[orderBy.type];
-
-            weknowGridConfig.data.sort.push(weknowColumnConfig);
+    let columnRefs;
+    if (ObjectTypes.Chart) {
+        columnRefs = weknowConfig.data.values.concat(weknowConfig.data.labels).map((item) => {
+            return {
+                completeName: item.items[0].completeName,
+                title: item.title
+            }
         });
-        fixCompleteNameRefs(weknowGridConfig.data.columns, weknowGridConfig.data.sort);
+    } else {
+        columnRefs = weknowConfig.data.columns;
+    }
+
+    if (statement.orderby) {
+        weknowConfig.data.sort = [];
+        statement.orderby.forEach((orderBy) => {
+            let weknowItemConfig = processAstExprToWeknow(weknowConfig, statement, orderBy.expr, '');
+
+            weknowItemConfig.direction = AstSortTypeToWeknow[orderBy.type || 'ASC'];
+
+            weknowConfig.data.sort.push(weknowItemConfig);
+        });
+        fixCompleteNameRefs(columnRefs, weknowConfig.data.sort);
+    }
+
+    if (type === ObjectTypes.Chart && statement.groupby) {
+        weknowConfig.data.groups = [];
+        statement.groupby.forEach((groupby) => {
+            let weknowItemConfig = processAstExprToWeknow(weknowConfig, statement, groupby, '');
+
+            weknowConfig.data.groups.push(weknowItemConfig);
+        });
+        fixCompleteNameRefs(columnRefs, weknowConfig.data.groups);
     }
 
     if (statement.where) {
-        weknowGridConfig.data.whereFilters = {
+        weknowConfig.data.whereFilters = {
             filters: []
         }
         if (Array.isArray(statement.where)) {
@@ -127,14 +169,14 @@ function createWeknowGridConfigFromAst(metadataId, fieldsList, sqlAst) {
             //     weknowGridConfig.data.sort.push(weknowColumnConfig);
             // });
         } else {
-            let weknowWhereConfig = processAstExprToWeknow(weknowGridConfig, statement, statement.where, '');
-            weknowGridConfig.data.whereFilters.filters.push(weknowWhereConfig);
+            let weknowWhereConfig = processAstExprToWeknow(weknowConfig, statement, statement.where, '');
+            weknowConfig.data.whereFilters.filters.push(weknowWhereConfig);
         }
-        fixCompleteNameRefs(weknowGridConfig.data.columns, weknowGridConfig.data.whereFilters.filters);
+        fixCompleteNameRefs(columnRefs, weknowConfig.data.whereFilters.filters);
     }
 
     if (statement.having) {
-        weknowGridConfig.data.havingFilters = {
+        weknowConfig.data.havingFilters = {
             filters: []
         };
         if (Array.isArray(statement.having)) {
@@ -142,13 +184,13 @@ function createWeknowGridConfigFromAst(metadataId, fieldsList, sqlAst) {
             //     weknowGridConfig.data.sort.push(weknowColumnConfig);
             // });
         } else {
-            let weknowHavingConfig = processAstExprToWeknow(weknowGridConfig, statement, statement.having, '');
-            weknowGridConfig.data.havingFilters.filters.push(weknowHavingConfig);
+            let weknowHavingConfig = processAstExprToWeknow(weknowConfig, statement, statement.having, '');
+            weknowConfig.data.havingFilters.filters.push(weknowHavingConfig);
         }
-        fixCompleteNameRefs(weknowGridConfig.data.columns, weknowGridConfig.data.havingFilters.filters);
+        fixCompleteNameRefs(columnRefs, weknowConfig.data.havingFilters.filters);
     }
 
-    return weknowGridConfig;
+    return weknowConfig;
 }
 
 export function astOperatorToWeknow(astOperator) {
@@ -194,8 +236,6 @@ export function shouldExprCreatesCalculatedField (expr) {
 }
 
 export function processAstExprToWeknow(weknowGridConfig, statement, expr, title, statementColumnIndex) {
-    let measureFunction;
-
     let weknowItem = {
         completeName: expr.column
     };
@@ -217,10 +257,11 @@ export function processAstExprToWeknow(weknowGridConfig, statement, expr, title,
         weknowGridConfig.data.calculatedFields.push(calculatedField);
     } else if (expr.type === 'aggr_func' && expr.args.expr.type === 'column_ref') { // Se for uma função de agregação e existir apenas uma coluna referenciada...
         let sqlAgg = expr.name;
-        measureFunction = AstAggFunctionToWeknow[sqlAgg];
+        let measureFunction = AstAggFunctionToWeknow[sqlAgg];
         if (measureFunction) {
             weknowItem.completeName = expr.args.expr.column;
             weknowItem.title = title || expr.args.expr.column;
+            weknowItem.measureFunction = measureFunction;
         }
     } else if (expr.type === 'column_ref' && title) {
         weknowItem.title = title;
