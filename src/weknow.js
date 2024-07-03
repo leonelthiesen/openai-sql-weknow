@@ -85,8 +85,9 @@ export async function renderComponent (config, data) {
         }
     }, process.env.WEKNOW_ACCOUNT_TOKEN);
 
-    await page.goto(`http://${process.env.WEKNOW_API_HOST || 'localhost'}/#/desktopstart`);
-    await page.goto(`http://${process.env.WEKNOW_API_HOST || 'localhost'}/#/objectViewer`);
+    let origin = `http://${process.env.WEKNOW_API_HOST || 'localhost'}:${process.env.WEKNOW_API_PORT || '80'}`;
+    await page.goto(`${origin}/#/desktopstart`);
+    await page.goto(`${origin}/#/objectViewer`);
     await page.evaluate((config, data) => {
         window.wknwweb.setObjectContents(config)
         window.wknwweb.setObjectData(data)

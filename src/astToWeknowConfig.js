@@ -17,7 +17,7 @@ const WeknowAggFunctions = {
     DistinctAverage: 10,
 }
 
-const ValidWeknowOperators = {
+export const ValidWeknowOperators = {
     Contains: 0,
     Equals: 1,
     GreatherThan: 3,
@@ -58,16 +58,16 @@ const AstSortTypeToWeknow = {
 
 let astColumnIndexToCalculatedField = {};
 
-export function createWeknowGridConfigFromSql (metadataId, sql) {
+export function createWeknowGridConfigFromSql(metadataId, fieldsList, sql) {
     let sqlParser = new Parser();
     const ast = sqlParser.astify(sql);
     return {
         ast,
-        weknowGridConfig: createWeknowGridConfigFromAst(metadataId, ast)
+        weknowGridConfig: createWeknowGridConfigFromAst(metadataId, fieldsList, ast)
     };
 }
 
-function createWeknowGridConfigFromAst (metadataId, sqlAst) {
+function createWeknowGridConfigFromAst(metadataId, fieldsList, sqlAst) {
     let statement = sqlAst[0];
     if (!Array.isArray(sqlAst)) {
         statement = sqlAst;
@@ -81,107 +81,126 @@ function createWeknowGridConfigFromAst (metadataId, sqlAst) {
     weknowGridConfig.data.metadataId = metadataId;
 
     weknowGridConfig.data.columns = [];
+
+    // Verifica se existe alguma coluna que é igual a "*", neste caso ajusta o ast para pegar todas as colunas da tabela
+    let allColumnsIndex = statement.columns.findIndex((column) => column.expr.column === '*');
+    if (allColumnsIndex > -1) {
+        statement.columns.splice(allColumnsIndex, 1);
+
+        fieldsList.forEach((completeName) => {
+            statement.columns.push({
+                expr: {
+                    type: "column_ref",
+                    table: null,
+                    column: completeName
+                },
+                as: completeName
+            });
+        });
+    }
+
     statement.columns.forEach((column, index) => {
         let title = column.as || column.expr.column;
-        let weknowColumnConfig = processAstExprToWeknow(weknowGridConfig, column.expr, title, index);
 
+        let weknowColumnConfig = processAstExprToWeknow(weknowGridConfig, statement, column.expr, title, index);
         weknowGridConfig.data.columns.push(weknowColumnConfig);
     });
 
-    weknowGridConfig.data.sort = [];
-    statement.orderby && statement.orderby.forEach((orderBy) => {
-        if (orderBy.expr.type === 'column_ref') {
-            let columnIndex = statement.columns.findIndex((column) => column.as === orderBy.expr.column);
-            if (columnIndex > -1)  {
-                let column = statement.columns[columnIndex];
-                if (astColumnIndexToCalculatedField[columnIndex]) {
-                    orderBy.expr.column = astColumnIndexToCalculatedField[columnIndex];
-                } else {
-                    orderBy.expr.column = column.expr.column;
-                    orderBy.as = column.expr.column;
-                }
-            }
-        }
+    if (statement.orderby) {
+        weknowGridConfig.data.sort = [];
+        statement.orderby.forEach((orderBy) => {
+            let weknowColumnConfig = processAstExprToWeknow(weknowGridConfig, statement, orderBy.expr, orderBy.as);
 
-        let weknowColumnConfig = processAstExprToWeknow(weknowGridConfig, orderBy.expr, orderBy.as);
+            weknowColumnConfig.direction = AstSortTypeToWeknow[orderBy.type];
 
-        weknowColumnConfig.direction = AstSortTypeToWeknow[orderBy.type];
-
-        weknowGridConfig.data.sort.push(weknowColumnConfig);
-    });
-
-    weknowGridConfig.data.whereFilters = {
-        filters: []
+            weknowGridConfig.data.sort.push(weknowColumnConfig);
+        });
+        fixCompleteNameRefs(weknowGridConfig.data.columns, weknowGridConfig.data.sort);
     }
 
-    if (statement.where && Array.isArray(statement.where)) {
-        // statement.where.forEach((where) => {
-        //     weknowGridConfig.data.sort.push(weknowColumnConfig);
-        // });
-    } else if (statement.where) {
-        if (statement.where.type === 'binary_expr') {
-            let weknowWhereConfig = processAstWhereToWeknow(statement.where);
+    if (statement.where) {
+        weknowGridConfig.data.whereFilters = {
+            filters: []
+        }
+        if (Array.isArray(statement.where)) {
+            // statement.where.forEach((where) => {
+            //     weknowGridConfig.data.sort.push(weknowColumnConfig);
+            // });
+        } else {
+            let weknowWhereConfig = processAstExprToWeknow(weknowGridConfig, statement, statement.where, '');
             weknowGridConfig.data.whereFilters.filters.push(weknowWhereConfig);
         }
+        fixCompleteNameRefs(weknowGridConfig.data.columns, weknowGridConfig.data.whereFilters.filters);
+    }
+
+    if (statement.having) {
+        weknowGridConfig.data.havingFilters = {
+            filters: []
+        };
+        if (Array.isArray(statement.having)) {
+            // statement.having.forEach((having) => {
+            //     weknowGridConfig.data.sort.push(weknowColumnConfig);
+            // });
+        } else {
+            let weknowHavingConfig = processAstExprToWeknow(weknowGridConfig, statement, statement.having, '');
+            weknowGridConfig.data.havingFilters.filters.push(weknowHavingConfig);
+        }
+        fixCompleteNameRefs(weknowGridConfig.data.columns, weknowGridConfig.data.havingFilters.filters);
     }
 
     return weknowGridConfig;
 }
 
-function astOperatorToWeknow (astOperator) {
+export function astOperatorToWeknow(astOperator) {
     return AstOperatorToWeknow[astOperator];
 }
 
-function astNegationToWeknow (astOperator) {
+function astNegationToWeknow(astOperator) {
     if (astOperator === 'NOT LIKE') {
         return true;
     }
     return false;
 }
 
-function processAstWhereToWeknow (where) {
-    let weknowItem = {
-        completeName: where.column
-    };
-
-    if (where.type === 'binary_expr') {
-        weknowItem.completeName = where.left.column;
-        weknowItem.operator = astOperatorToWeknow(where.operator);
-        weknowItem.not = astNegationToWeknow(where.operator);
-
-        weknowItem.values = {
-            mode: 1,
-            fidexValues: [where.right.value]
+function fixCompleteNameRefs (columns, weknowItems) {
+    weknowItems.forEach((weknowItem) => {
+        if (weknowItem.completeName) {
+            let columnIndex = columns.findIndex((column) => column.title === weknowItem.completeName);
+            if (columnIndex > -1) {
+                let column = columns[columnIndex];
+                weknowItem.completeName = column.completeName;
+            }
         }
-    }
-    return weknowItem;
+    });
 }
 
-function processAstExprToWeknow (weknowGridConfig, expr, title, statementColumnIndex) {
+export function shouldExprCreatesCalculatedField (expr) {
+    if (expr.type === 'column_ref') {
+        return false;
+    } else if (expr.type === 'aggr_func' && expr.args.expr.type === 'column_ref') {
+        let sqlAgg = expr.name;
+        let measureFunction = AstAggFunctionToWeknow[sqlAgg];
+        if (measureFunction) {
+            return false;
+        }
+    } else if (expr.type === 'binary_expr') {
+        return shouldExprCreatesCalculatedField(expr.left) || shouldExprCreatesCalculatedField(expr.right);
+    } else if (expr.type === "number") {
+        return false;
+    } else if (expr.type === "single_quote_string") {
+        return false;
+    }
+    return true;
+}
+
+export function processAstExprToWeknow(weknowGridConfig, statement, expr, title, statementColumnIndex) {
     let measureFunction;
-    let shouldCreateCalculatedField = false;
 
     let weknowItem = {
         completeName: expr.column
     };
 
-    // Se for uma função de agregação e existir apenas uma coluna referenciada...
-    if (expr.type === 'aggr_func' && expr.args.expr.type === 'column_ref') {
-        let sqlAgg = expr.name;
-        measureFunction = AstAggFunctionToWeknow[sqlAgg];
-        if (measureFunction) {
-            weknowItem.completeName = expr.args.expr.column;
-            weknowItem.title = title || expr.args.expr.column;
-        } else {
-            shouldCreateCalculatedField = true;
-        }
-    } else if (expr.type !== 'column_ref') {
-        shouldCreateCalculatedField = true;
-    } else if (expr.type === 'column_ref' && title) {
-        weknowItem.title = title;
-    }
-
-    if (shouldCreateCalculatedField) {
+    if (shouldExprCreatesCalculatedField(expr)) {
         if (!weknowGridConfig.data.calculatedFields) {
             weknowGridConfig.data.calculatedFields = [];
         }
@@ -196,13 +215,35 @@ function processAstExprToWeknow (weknowGridConfig, expr, title, statementColumnI
         weknowItem.title = title || calculatedField.completeName;
 
         weknowGridConfig.data.calculatedFields.push(calculatedField);
+    } else if (expr.type === 'aggr_func' && expr.args.expr.type === 'column_ref') { // Se for uma função de agregação e existir apenas uma coluna referenciada...
+        let sqlAgg = expr.name;
+        measureFunction = AstAggFunctionToWeknow[sqlAgg];
+        if (measureFunction) {
+            weknowItem.completeName = expr.args.expr.column;
+            weknowItem.title = title || expr.args.expr.column;
+        }
+    } else if (expr.type === 'column_ref' && title) {
+        weknowItem.title = title;
+    } else if (expr.type === 'binary_expr') {
+        if (expr.left.type === 'aggr_func') {
+            weknowItem.completeName = expr.left.args.expr.column;
+        } else {
+            weknowItem.completeName = expr.left.column;
+        }
+
+        weknowItem.operator = astOperatorToWeknow(expr.operator);
+        weknowItem.not = astNegationToWeknow(expr.operator);
+        weknowItem.values = {
+            mode: 1,
+            fidexValues: [expr.right.value]
+        };
     }
 
     return weknowItem;
 }
 
-function createCalculatedField (astExpr, title, name) {
-    function convertColumnRefs (object) {
+function createCalculatedField(astExpr, title, name) {
+    function convertColumnRefs(object) {
         if (object.type === 'column_ref') {
             object.column = `%${object.column}%`;
         }

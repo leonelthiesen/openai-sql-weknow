@@ -6,13 +6,13 @@ The SQL should use only the following fields of table "data":
 
 export const TEST_SQL = `SELECT
                             company_name,
-                            employee_id AS melhor_vendedor_id,
-                            employee_person_id AS melhor_vendedor_person_id,
                             SUM(product_unit_price * sale_item_quantity) AS total_vendas
                         FROM
                             data
                         WHERE
                             uf2_uf NOT LIKE 'SC'
+                        HAVING
+                            SUM(total_vendas) > 10000
                         ORDER BY
                             total_vendas DESC;`;
 

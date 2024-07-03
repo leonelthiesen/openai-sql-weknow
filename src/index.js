@@ -33,57 +33,52 @@ async function main() {
     }
 
     if (auth) {
-        await processMessages(auth);
+        await processMessage(userTestMessages[0], auth);
     }
+    exit();
 }
 
-async function processMessages(auth) {
-    console.log('Processing messages...');
-    for (let userMessage of userTestMessages) {
-        console.log('Processing message:', userMessage);
-        console.log('Getting metadata summary...');
-        let metadataSummary = await weknow.getMetadataSummary(userMessage.metadataId, auth.accessToken);
-        let fields = convertTreeViewInList(metadataSummary.fields || []);
-        let completeNameOptions = fields.map((field) => field.completeName);
-        let completeNameOptionsList = completeNameOptions.join('\n');
-        let systemMessage = SYSTEM_MESSAGE + completeNameOptionsList;
+async function processMessage(userMessage, auth) {
+    console.log('Processing message:', userMessage);
+    console.log('Getting metadata summary...');
+    let metadataSummary = await weknow.getMetadataSummary(process.env.METADATA_ID, auth.accessToken);
+    let fields = convertTreeViewInList(metadataSummary.fields || []);
+    let completeNameList = fields.map((field) => field.completeName);
+    let completeNameStringList = completeNameList.join('\n');
+    let systemMessage = SYSTEM_MESSAGE + completeNameStringList;
 
-        console.log('Getting chat completion...');
-        let completionSql = await getChatCompletion(systemMessage, userMessage.message);
+    console.log('Getting chat completion...');
+    let completionSql = await getChatCompletion(systemMessage, userMessage.message);
 
-        console.log('Creating Weknow grid config...');
-        let { weknowGridConfig, ast } = createWeknowGridConfigFromSql(userMessage.metadataId, completionSql);
+    console.log('Creating Weknow grid config...');
+    let { weknowGridConfig, ast } = createWeknowGridConfigFromSql(userMessage.metadataId, completeNameList, completionSql);
 
-        console.log('Executing Weknow component...');
-        let error = null;
-        let executionResults = await weknow.executeComponent(weknowGridConfig, auth.accessToken);
-        if (executionResults.error) {
-            error = executionResults;
-        }
-
-        console.log('Rendering Weknow component...');
-        let gridBinaryScreenshot = null;
-        try {
-            gridBinaryScreenshot = await weknow.renderComponent(weknowGridConfig, executionResults);
-        } catch (error) {
-            console.log(error);
-        }
-
-        console.log('Saving chat completion results...');
-        await saveChatCompletionResults({
-            systemMessage: systemMessage,
-            userMessage: userMessage.message,
-            completion: completionSql,
-            ast: JSON.stringify(ast),
-            weknowGridConfig: JSON.stringify(weknowGridConfig),
-            gridResult: gridBinaryScreenshot,
-            error: error ? JSON.stringify(error) : null
-        });
-        console.log('Finished processing message:', userMessage);
+    console.log('Executing Weknow component...');
+    let error = null;
+    let executionResults = await weknow.executeComponent(weknowGridConfig, auth.accessToken);
+    if (executionResults.error) {
+        error = executionResults;
     }
-    console.log('Finished processing messages.');
 
-    exit();
+    console.log('Rendering Weknow component...');
+    let gridBinaryScreenshot = null;
+    try {
+        gridBinaryScreenshot = await weknow.renderComponent(weknowGridConfig, executionResults);
+    } catch (error) {
+        console.log(error);
+    }
+
+    console.log('Saving chat completion results...');
+    await saveChatCompletionResults({
+        systemMessage: systemMessage,
+        userMessage: userMessage.message,
+        completion: completionSql,
+        ast: JSON.stringify(ast),
+        weknowGridConfig: JSON.stringify(weknowGridConfig),
+        gridResult: gridBinaryScreenshot,
+        error: error ? JSON.stringify(error) : null
+    });
+    console.log('Finished processing message:', userMessage);
 }
 
 function exit(error) {
@@ -112,6 +107,10 @@ function convertTreeViewInList (treeView) {
     });
     return tempFieldList;
 }
+
+// function shouldGenerateChart () {
+//     return false;
+// }
 
 async function saveChatCompletionResults({ systemMessage, userMessage, completion, ast, weknowGridConfig, gridResult, error }) {
     const chatCompletions = await sql`
