@@ -94,11 +94,6 @@ export async function renderComponent (config, data) {
 
     }, config, data);
 
-    await page.evaluate((config, data) => {
-        window.wknwweb.setObjectContents(config)
-        window.wknwweb.setObjectData(data)
-    }, config, data);
-
     if (config.type === ObjectTypes.Table) {
         await page.waitForSelector('.dx-datagrid, .component-load-error', { visible: true });
     } else if (config.type === ObjectTypes.Chart) {

@@ -27,7 +27,7 @@ export const ObjectGridTypes = {
 }
 
 export const baseGridConfig = {
-    // version: "5.0.0",
+    version: "4.4.0",
     type: ObjectTypes.Table,
     viewAllowed: true,
     title: {
@@ -53,14 +53,14 @@ export const baseGridConfig = {
 };
 
 export const baseChartConfig = {
-    // version: "5.0.0",
+    version: "4.4.0",
     type: ObjectTypes.Chart,
     viewAllowed: true,
     title: {
         text: "Título"
     },
     data: {
-        metadataId: 25,
+        metadataId: -1,
         immediately: true,
         autoLink: {
             disableAutoLink: false
@@ -88,18 +88,6 @@ export const baseChartConfig = {
                 incrementValue: 4
             }
         },
-        selection: {
-            color: "~selectionBackground",
-            allowMultiple: true
-        },
-        labelLimit: {
-            count: -1
-        },
-        serieLimit: {
-            count: -1
-        },
-        calculateLabelsOnBackwardAndForward: true,
-        toPairDataAxis: true,
         defaultSerie: {
             percentualFormatOptions: {
                 format: 1,
@@ -137,9 +125,6 @@ export const baseChartConfig = {
             legendText: "",
             centralText: ""
         },
-        autoTitle: {
-            enabled: false
-        }
     },
     style: {}
 };

@@ -87,7 +87,7 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
         weknowConfig.data.columns = [];
     }
 
-    weknowConfig.data.metadataId = metadataId;
+    weknowConfig.data.metadataId = +metadataId;
 
     // Verifica se existe alguma coluna que é igual a "*", neste caso ajusta o ast para pegar todas as colunas da tabela
     let allColumnsIndex = statement.columns.findIndex((column) => column.expr.column === '*');
@@ -127,10 +127,11 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
     });
 
     let columnRefs;
-    if (ObjectTypes.Chart) {
-        columnRefs = weknowConfig.data.values.concat(weknowConfig.data.labels).map((item) => {
+    if (type === ObjectTypes.Chart) {
+        columnRefs = (weknowConfig.data.values || []).concat(weknowConfig.data.labels).map((item) => {
             return {
                 completeName: item.items[0].completeName,
+                measureFunction: item.items[0].measureFunction,
                 title: item.title
             }
         });
@@ -154,6 +155,12 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
         weknowConfig.data.groups = [];
         statement.groupby.forEach((groupby) => {
             let weknowItemConfig = processAstExprToWeknow(weknowConfig, statement, groupby, '');
+
+            // Se já estiver em values ou labels (columnRefs), não adiciona em groups
+            let columnIndex = columnRefs.findIndex((column) => column.completeName === weknowItemConfig.completeName);
+            if (columnIndex > -1) {
+                return;
+            }
 
             weknowConfig.data.groups.push(weknowItemConfig);
         });
@@ -211,6 +218,7 @@ function fixCompleteNameRefs (columns, weknowItems) {
             if (columnIndex > -1) {
                 let column = columns[columnIndex];
                 weknowItem.completeName = column.completeName;
+                weknowItem.measureFunction = column.measureFunction;
             }
         }
     });

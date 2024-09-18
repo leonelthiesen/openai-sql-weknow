@@ -18,6 +18,7 @@ test('create grid config from sql 1 for metadataId 8 to equal ... ', () => {
     let fieldList = [ 'company_name', 'product_unit_price', 'sale_item_quantity', 'uf2_uf', 'uf2_longitude', 'person_1_name', 'valorTotalItem'];
     let { weknowConfig } = createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
     expect(weknowConfig).toEqual({
+        version: "4.4.0",
         type: 3,
         viewAllowed: true,
         title: {
@@ -56,7 +57,8 @@ test('create grid config from sql 1 for metadataId 8 to equal ... ', () => {
             sort: [
                 {
                     completeName: "valorTotalItem",
-                    direction: 1
+                    direction: 1,
+                    measureFunction: 3
                 }
             ],
             whereFilters: {
@@ -96,6 +98,7 @@ test('create grid config from sql 2 for metadataId 8 to equal ... ', () => {
 
     let { weknowConfig } = createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
     expect(weknowConfig).toEqual({
+        version: "4.4.0",
         type: 3,
         viewAllowed: true,
         title: {
@@ -182,6 +185,7 @@ test('create grid config from sql 3 with * for metadataId 8 to equal ... ', () =
     let fieldList = [ 'company_name', 'product_unit_price', 'sale_item_quantity', 'uf2_uf'];
     let { weknowConfig } = createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
     expect(weknowConfig).toEqual({
+        version: "4.4.0",
         type: 3,
         viewAllowed: true,
         title: {
