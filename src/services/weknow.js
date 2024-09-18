@@ -3,7 +3,7 @@
 import fetch from 'node-fetch';
 import crypto from 'crypto';
 import puppeteer from 'puppeteer-core';
-import { ObjectTypes } from './constants.js';
+import { ObjectTypes } from '../constants.js';
 
 let metadataSummaryCache = {};
 

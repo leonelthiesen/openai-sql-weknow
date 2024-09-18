@@ -1,19 +1,16 @@
 import 'dotenv/config';
-import OpenAI from 'openai';
 import { ObjectTypes, SYSTEM_MESSAGE } from './constants.js';
 import process from 'process';
 import sql from './db.js'
-import * as weknow from './weknow.js';
+import * as weknow from './services/weknow.js';
 import { createRequire } from "module";
 import { createWeknowConfigFromSql } from './astToWeknowConfig.js';
 const require = createRequire(import.meta.url);
 const userTestMessages = require("../data/user-test-messages.json");
 import { parseArgs } from 'node:util';
+import { convertTreeViewInList } from './utils/utils.js';
+import { getChatCompletion } from './services/openAiChat.js';
 
-const OpenAiModels = {
-    gpt4: "gpt-4",
-    gpt35Turbo: "gpt-3.5-turbo",
-};
 
 await main();
 
@@ -103,26 +100,6 @@ function exit(error) {
     sql.end();
 }
 
-function convertTreeViewInList (treeView) {
-    var tempFieldList = [];
-    treeView.forEach((field) => {
-        if (field.isField) {
-            const listField = { ...field };
-            delete listField.items;
-            tempFieldList.push(listField);
-        }
-        if (field.items) {
-            let parentRef = field.completeName;
-            if (!field.isField) {
-                parentRef = null;
-            }
-            var tempChildFields = convertTreeViewInList(field.items, parentRef);
-            tempFieldList = tempFieldList.concat(tempChildFields);
-        }
-    });
-    return tempFieldList;
-}
-
 // function shouldGenerateChart () {
 //     return false;
 // }
@@ -136,27 +113,4 @@ async function saveChatCompletionResults({ systemMessage, userMessage, completio
         returning system_message, user_message, completion, ast, weknow_config, render_result, error
     `;
     return chatCompletions;
-}
-
-async function getChatCompletion (systemMessage, userMessage) {
-    let openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-    });
-    const chatCompletion = await openai.chat.completions.create({
-        model: OpenAiModels.gpt35Turbo,
-        messages: [{
-            role: "system",
-            content: systemMessage
-        }, {
-            role: "user",
-            content: userMessage
-        }],
-        temperature: 0,
-        max_tokens: 1024,
-        top_p: 1,
-        frequency_penalty: 0,
-        presence_penalty: 0
-    });
-
-    return chatCompletion.choices[0].message.content;
 }
