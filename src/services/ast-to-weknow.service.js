@@ -1,4 +1,4 @@
-import { ObjectTypes, baseChartConfig, baseGridConfig } from './constants.js';
+import { ObjectTypes, baseChartConfig, baseGridConfig } from '../constants.js';
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const { Parser } = require('node-sql-parser');
@@ -17,7 +17,7 @@ const WeknowAggFunctions = {
     DistinctAverage: 10,
 }
 
-export const ValidWeknowOperators = {
+const ValidWeknowOperators = {
     Contains: 0,
     Equals: 1,
     GreatherThan: 3,
@@ -58,7 +58,7 @@ const AstSortTypeToWeknow = {
 
 let astColumnIndexToCalculatedField = {};
 
-export function createWeknowConfigFromSql(metadataId, type, fieldsList, sql) {
+function createWeknowConfigFromSql(metadataId, type, fieldsList, sql) {
     let sqlParser = new Parser();
     const ast = sqlParser.astify(sql);
     return {
@@ -200,7 +200,7 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
     return weknowConfig;
 }
 
-export function astOperatorToWeknow(astOperator) {
+function astOperatorToWeknow(astOperator) {
     return AstOperatorToWeknow[astOperator];
 }
 
@@ -224,7 +224,7 @@ function fixCompleteNameRefs (columns, weknowItems) {
     });
 }
 
-export function shouldExprCreatesCalculatedField (expr) {
+function shouldExprCreatesCalculatedField (expr) {
     if (expr.type === 'column_ref') {
         return false;
     } else if (expr.type === 'aggr_func' && expr.args.expr.type === 'column_ref') {
@@ -243,7 +243,7 @@ export function shouldExprCreatesCalculatedField (expr) {
     return true;
 }
 
-export function processAstExprToWeknow(weknowGridConfig, statement, expr, title, statementColumnIndex) {
+function processAstExprToWeknow(weknowGridConfig, statement, expr, title, statementColumnIndex) {
     let weknowItem = {
         completeName: expr.column
     };
@@ -337,3 +337,11 @@ function createCalculatedField(astExpr, title, name) {
     };
     return calculatedField;
 }
+
+export default {
+    createWeknowConfigFromSql,
+    ValidWeknowOperators,
+    astOperatorToWeknow,
+    shouldExprCreatesCalculatedField,
+    processAstExprToWeknow
+};

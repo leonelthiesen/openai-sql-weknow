@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
-import { ValidWeknowOperators, astOperatorToWeknow, createWeknowConfigFromSql, shouldExprCreatesCalculatedField } from './astToWeknowConfig.js'
-import { ObjectTypes } from './constants.js';
+import astToWeknowService from './ast-to-weknow.service.js'
+import { ObjectTypes } from '../constants.js';
 
 test('create grid config from sql 1 for metadataId 8 to equal ... ', () => {
     let sql = `
@@ -16,7 +16,7 @@ test('create grid config from sql 1 for metadataId 8 to equal ... ', () => {
             ORDER BY
                 total_vendas DESC;`;
     let fieldList = [ 'company_name', 'product_unit_price', 'sale_item_quantity', 'uf2_uf', 'uf2_longitude', 'person_1_name', 'valorTotalItem'];
-    let { weknowConfig } = createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
+    let { weknowConfig } = astToWeknowService.createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
     expect(weknowConfig).toEqual({
         version: "4.4.0",
         type: 3,
@@ -96,7 +96,7 @@ test('create grid config from sql 2 for metadataId 8 to equal ... ', () => {
                 total_vendas DESC;`;
     let fieldList = [ 'company_name', 'product_unit_price', 'sale_item_quantity', 'uf2_uf', 'uf2_longitude', 'person_1_name'];
 
-    let { weknowConfig } = createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
+    let { weknowConfig } = astToWeknowService.createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
     expect(weknowConfig).toEqual({
         version: "4.4.0",
         type: 3,
@@ -183,7 +183,7 @@ test('create grid config from sql 2 for metadataId 8 to equal ... ', () => {
 test('create grid config from sql 3 with * for metadataId 8 to equal ... ', () => {
     let sql = `SELECT * FROM data WHERE uf2_uf NOT LIKE 'SC'`;
     let fieldList = [ 'company_name', 'product_unit_price', 'sale_item_quantity', 'uf2_uf'];
-    let { weknowConfig } = createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
+    let { weknowConfig } = astToWeknowService.createWeknowConfigFromSql(8, ObjectTypes.Table, fieldList, sql);
     expect(weknowConfig).toEqual({
         version: "4.4.0",
         type: 3,
@@ -241,19 +241,19 @@ test('create grid config from sql 3 with * for metadataId 8 to equal ... ', () =
 });
 
 test('astOperatorToWeknow LIKE', () => {
-    expect(astOperatorToWeknow('LIKE')).toBe(ValidWeknowOperators.Contains);
+    expect(astToWeknowService.astOperatorToWeknow('LIKE')).toBe(astToWeknowService.ValidWeknowOperators.Contains);
 });
 
 test('astOperatorToWeknow <=', () => {
-    expect(astOperatorToWeknow('<=')).toBe(ValidWeknowOperators.LessThanOrEqual);
+    expect(astToWeknowService.astOperatorToWeknow('<=')).toBe(astToWeknowService.ValidWeknowOperators.LessThanOrEqual);
 });
 
 test('should column_ref create calc field', () => {
-    expect(shouldExprCreatesCalculatedField({ type: "column_ref", table: null, column: "company_name" })).toBe(false);
+    expect(astToWeknowService.shouldExprCreatesCalculatedField({ type: "column_ref", table: null, column: "company_name" })).toBe(false);
 });
 
 test('should complex agg_func create calc field', () => {
-    expect(shouldExprCreatesCalculatedField({
+    expect(astToWeknowService.shouldExprCreatesCalculatedField({
         type: "aggr_func", name: "SUM",
         args: {
             expr: {
@@ -270,7 +270,7 @@ test('should complex agg_func create calc field', () => {
 });
 
 test('should simples binary_expr create calc field', () => {
-    expect(shouldExprCreatesCalculatedField({
+    expect(astToWeknowService.shouldExprCreatesCalculatedField({
         type: "binary_expr", operator: "NOT LIKE",
         left: {
             type: "column_ref", table: null, column: "uf2_uf"
@@ -282,7 +282,7 @@ test('should simples binary_expr create calc field', () => {
 });
 
 test('should binary_expr with aggr_func create calc field', () => {
-    expect(shouldExprCreatesCalculatedField({
+    expect(astToWeknowService.shouldExprCreatesCalculatedField({
         type: "binary_expr", operator: ">",
         left: {
             type: "aggr_func", name: "SUM",

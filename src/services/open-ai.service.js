@@ -5,7 +5,7 @@ const OpenAiModels = {
     gpt35Turbo: "gpt-3.5-turbo",
 };
 
-export async function getChatCompletion (systemMessage, userMessage) {
+async function getChatCompletion (systemMessage, userMessage) {
     let openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY
     });
@@ -27,3 +27,7 @@ export async function getChatCompletion (systemMessage, userMessage) {
 
     return chatCompletion.choices[0].message.content;
 }
+
+export default {
+    getChatCompletion
+};

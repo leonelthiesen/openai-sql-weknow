@@ -11,7 +11,7 @@ function getUrl(path) {
     return `http://${process.env.WEKNOW_API_HOST || 'localhost'}/weknow/datasnap/rest/${path}`;
 }
 
-export async function authenticate(userName, password, clientAppType, accountToken) {
+async function authenticate(userName, password, clientAppType, accountToken) {
     let url = getUrl('TSecurityApi/Authenticate');
 
     const passwordHash64 = crypto.createHash('sha512').update(process.env.WEKNOW_PASSWORD_SALT + password).digest('base64');
@@ -26,7 +26,7 @@ export async function authenticate(userName, password, clientAppType, accountTok
     return response.json();
 }
 
-export async function getMetadataSummary(metadataId, accessToken) {
+async function getMetadataSummary(metadataId, accessToken) {
     if (metadataSummaryCache[metadataId]) {
         return metadataSummaryCache[metadataId];
     }
@@ -44,7 +44,7 @@ export async function getMetadataSummary(metadataId, accessToken) {
     return await metadataSummaryCache[metadataId];
 }
 
-export async function executeComponent(contents, accessToken) {
+async function executeComponent(contents, accessToken) {
     let url = getUrl('TComponentApi/Execute');
 
     const body = { contents, accessToken };
@@ -57,7 +57,7 @@ export async function executeComponent(contents, accessToken) {
     return response.json();
 }
 
-export async function renderComponent (config, data) {
+async function renderComponent (config, data) {
     const browser = await puppeteer.launch({
         executablePath: process.env.CHROME_EXECUTABLE_PATH,
         // headless: false,
@@ -111,3 +111,10 @@ export async function renderComponent (config, data) {
 
     return binaryScreenshot;
 }
+
+export default {
+    authenticate,
+    getMetadataSummary,
+    executeComponent,
+    renderComponent
+};
