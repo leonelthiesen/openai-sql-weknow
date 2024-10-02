@@ -89,7 +89,6 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
     let weknowConfig;
     if (type === ObjectTypes.Chart) {
         weknowConfig = structuredClone(baseChartConfig);
-        weknowConfig.data.values = [];
         weknowConfig.data.labels = [];
     } else {
         weknowConfig = structuredClone(baseGridConfig);
@@ -117,25 +116,31 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
         });
     }
 
+    let valueItemTemp = { items: [] };
     statement.columns.forEach((column, index) => {
         let title = column.as || column.expr.column;
 
         let weknowItemConfig = processAstExprToWeknow(weknowConfig, statement, column.expr, title, index, statementDistinct);
         if (type === ObjectTypes.Chart) {
-            weknowItemConfig = {
-                items: [weknowItemConfig],
-                title: weknowItemConfig.title
-            }
-
             if (column.expr.type === 'aggr_func') {
-                weknowConfig.data.values.push(weknowItemConfig);
+                valueItemTemp.items.push(weknowItemConfig);
             } else {
-                weknowConfig.data.labels.push(weknowItemConfig);
+                weknowConfig.data.labels.push({
+                    items: [weknowItemConfig],
+                    title: weknowItemConfig.title
+                });
             }
         } else {
             weknowConfig.data.columns.push(weknowItemConfig);
         }
     });
+
+    if (valueItemTemp.items.length > 0) {
+        weknowConfig.data.values = [{
+            items: valueItemTemp.items,
+            title: valueItemTemp.items.map((item) => item.title).join(', ')
+        }];
+    }
 
     let columnRefs;
     if (type === ObjectTypes.Chart) {
@@ -162,18 +167,22 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
         fixCompleteNameRefs(columnRefs, weknowConfig.data.sort);
     }
 
-    if (type === ObjectTypes.Chart && statement.groupby) {
-        weknowConfig.data.groups = [];
+    weknowConfig.data.groups = [];
+    if (statement.groupby) {
         statement.groupby.forEach((groupby) => {
             let weknowItemConfig = processAstExprToWeknow(weknowConfig, statement, groupby, '');
 
-            // Se já estiver em values ou labels (columnRefs), não adiciona em groups
+            // Se já estiver em values ou labels (columnRefs), não adiciona novamente
             let columnIndex = columnRefs.findIndex((column) => column.completeName === weknowItemConfig.completeName);
             if (columnIndex > -1) {
                 return;
             }
 
-            weknowConfig.data.groups.push(weknowItemConfig);
+            if (type === ObjectTypes.Chart) {
+                weknowConfig.data.groups.push(weknowItemConfig);
+            } else {
+                weknowConfig.data.columns.push(weknowItemConfig);
+            }
         });
         fixCompleteNameRefs(columnRefs, weknowConfig.data.groups);
     }
@@ -223,10 +232,6 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
 
     if (weknowConfig.data.groups?.length === 0) {
         delete weknowConfig.data.groups;
-    }
-
-    if (weknowConfig.data.values?.length === 0) {
-        delete weknowConfig.data.values;
     }
 
     if (weknowConfig.data.labels?.length === 0) {
