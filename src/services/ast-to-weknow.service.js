@@ -51,6 +51,14 @@ const AstAggFunctionToWeknow = {
     'AVG': WeknowAggFunctions.Average,
 };
 
+const AstDistinctAggFunctionToWeknow = {
+    'COUNT': WeknowAggFunctions.DistinctCount,
+    'SUM': WeknowAggFunctions.DistinctSum,
+    'MAX': WeknowAggFunctions.Max,
+    'MIN': WeknowAggFunctions.Min,
+    'AVG': WeknowAggFunctions.DistinctAverage,
+};
+
 const AstSortTypeToWeknow = {
     'ASC': WeknowSortType.Asc,
     'DESC': WeknowSortType.Desc,
@@ -68,6 +76,7 @@ function createWeknowConfigFromSql(metadataId, type, fieldsList, sql) {
 }
 
 function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
+    astColumnIndexToCalculatedField = {};
     let statement = sqlAst[0];
     if (!Array.isArray(sqlAst)) {
         statement = sqlAst;
@@ -89,6 +98,8 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
 
     weknowConfig.data.metadataId = +metadataId;
 
+    let statementDistinct = statement.distinct;
+
     // Verifica se existe alguma coluna que é igual a "*", neste caso ajusta o ast para pegar todas as colunas da tabela
     let allColumnsIndex = statement.columns.findIndex((column) => column.expr.column === '*');
     if (allColumnsIndex > -1) {
@@ -109,14 +120,14 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
     statement.columns.forEach((column, index) => {
         let title = column.as || column.expr.column;
 
-        let weknowItemConfig = processAstExprToWeknow(weknowConfig, statement, column.expr, title, index);
+        let weknowItemConfig = processAstExprToWeknow(weknowConfig, statement, column.expr, title, index, statementDistinct);
         if (type === ObjectTypes.Chart) {
-            let measureFunction = weknowItemConfig.measureFunction;
             weknowItemConfig = {
                 items: [weknowItemConfig],
                 title: weknowItemConfig.title
             }
-            if (measureFunction) {
+
+            if (column.expr.type === 'aggr_func') {
                 weknowConfig.data.values.push(weknowItemConfig);
             } else {
                 weknowConfig.data.labels.push(weknowItemConfig);
@@ -128,7 +139,7 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
 
     let columnRefs;
     if (type === ObjectTypes.Chart) {
-        columnRefs = (weknowConfig.data.values || []).concat(weknowConfig.data.labels).map((item) => {
+        columnRefs = (weknowConfig.data.values || []).concat(weknowConfig.data.labels || []).map((item) => {
             return {
                 completeName: item.items[0].completeName,
                 measureFunction: item.items[0].measureFunction,
@@ -197,6 +208,31 @@ function createWeknowConfigFromAst(metadataId, type, fieldsList, sqlAst) {
         fixCompleteNameRefs(columnRefs, weknowConfig.data.havingFilters.filters);
     }
 
+    if (statement.limit && statement.limit.value[0]) {
+        let limit = statement.limit.value[0];
+        if (limit.type === 'number') {
+            weknowConfig.data.labelLimit = {
+                count: limit.value,
+                showAdditional: true,
+                additionalText: "Outros"
+            };
+        }
+    } else {
+        // TODO: limitar a quantidade de registros para o tipo de objeto grid
+    }
+
+    if (weknowConfig.data.groups?.length === 0) {
+        delete weknowConfig.data.groups;
+    }
+
+    if (weknowConfig.data.values?.length === 0) {
+        delete weknowConfig.data.values;
+    }
+
+    if (weknowConfig.data.labels?.length === 0) {
+        delete weknowConfig.data.labels;
+    }
+
     return weknowConfig;
 }
 
@@ -224,17 +260,17 @@ function fixCompleteNameRefs (columns, weknowItems) {
     });
 }
 
-function shouldExprCreatesCalculatedField (expr) {
+function shouldExprCreatesCalculatedField (expr, statementDistinct) {
     if (expr.type === 'column_ref') {
         return false;
     } else if (expr.type === 'aggr_func' && expr.args.expr.type === 'column_ref') {
         let sqlAgg = expr.name;
-        let measureFunction = AstAggFunctionToWeknow[sqlAgg];
+        let measureFunction = getWeknowAggFunction(sqlAgg, statementDistinct || expr.args.distinct);
         if (measureFunction) {
             return false;
         }
     } else if (expr.type === 'binary_expr') {
-        return shouldExprCreatesCalculatedField(expr.left) || shouldExprCreatesCalculatedField(expr.right);
+        return shouldExprCreatesCalculatedField(expr.left, statementDistinct) || shouldExprCreatesCalculatedField(expr.right, statementDistinct);
     } else if (expr.type === "number") {
         return false;
     } else if (expr.type === "single_quote_string") {
@@ -243,12 +279,43 @@ function shouldExprCreatesCalculatedField (expr) {
     return true;
 }
 
-function processAstExprToWeknow(weknowGridConfig, statement, expr, title, statementColumnIndex) {
+function gridConfigAllowChartRender (gridConfig) {
+    let calculatedFields = gridConfig.data.calculatedFields || [];
+
+    if (gridConfig && gridConfig.data) {
+        let allMeasureColumns = gridConfig.data.columns.every((column, index) => {
+            let calculatedFieldName = astColumnIndexToCalculatedField[index];
+            let calculatedFieldHasAggregation = false;
+            if (calculatedFieldName) {
+                let calculatedField = calculatedFields.find((field) => field.completeName === calculatedFieldName);
+                calculatedFieldHasAggregation = calculatedField.hasAggregateFunction;
+            }
+            return column.measureFunction > 0 || calculatedFieldHasAggregation;
+        });
+
+        if (allMeasureColumns) {
+            return false;
+        }
+
+        return gridConfig.data.columns.some((column, index) => {
+            let calculatedFieldName = astColumnIndexToCalculatedField[index];
+            let calculatedFieldHasAggregation = false;
+            if (calculatedFieldName) {
+                let calculatedField = calculatedFields.find((field) => field.completeName === calculatedFieldName);
+                calculatedFieldHasAggregation = calculatedField.hasAggregateFunction;
+            }
+            return column.measureFunction > 0 || calculatedFieldHasAggregation;
+        });
+    }
+    return false;
+}
+
+function processAstExprToWeknow(weknowGridConfig, statement, expr, title, statementColumnIndex, statementDistinct) {
     let weknowItem = {
         completeName: expr.column
     };
 
-    if (shouldExprCreatesCalculatedField(expr)) {
+    if (shouldExprCreatesCalculatedField(expr, statementDistinct)) {
         if (!weknowGridConfig.data.calculatedFields) {
             weknowGridConfig.data.calculatedFields = [];
         }
@@ -265,7 +332,7 @@ function processAstExprToWeknow(weknowGridConfig, statement, expr, title, statem
         weknowGridConfig.data.calculatedFields.push(calculatedField);
     } else if (expr.type === 'aggr_func' && expr.args.expr.type === 'column_ref') { // Se for uma função de agregação e existir apenas uma coluna referenciada...
         let sqlAgg = expr.name;
-        let measureFunction = AstAggFunctionToWeknow[sqlAgg];
+        let measureFunction = getWeknowAggFunction(sqlAgg, statementDistinct || expr.args.distinct);
         if (measureFunction) {
             weknowItem.completeName = expr.args.expr.column;
             weknowItem.title = title || expr.args.expr.column;
@@ -324,18 +391,35 @@ function createCalculatedField(astExpr, title, name) {
         title = name;
     }
 
+    const hasAggregateFunction = astExprHasAggregationFunction(astExpr);
+
     let calculatedField = {
         completeName: name,
         dataType: DataTypes.X,
         fieldTipe: FieldTypes.X,
         formula: columnSqlText,
-        hasAggregateFunction: true, // TODO: pegar do ast?
-        isAggregated: true, // TODO: pegar do ast?
-        isMeasure: true, //TODO: pegar do ast?
+        hasAggregateFunction,
         title: title,
         type: CalculatedFieldTypes.X
     };
     return calculatedField;
+}
+
+function astExprHasAggregationFunction (astExpr) {
+    if (astExpr.type === 'aggr_func') {
+        return true;
+    } else if (astExpr.type === 'binary_expr') {
+        return astExprHasAggregationFunction(astExpr.left) || astExprHasAggregationFunction(astExpr.right);
+    }
+    return false;
+
+}
+
+function getWeknowAggFunction (sqlAgg, distinct) {
+    if (distinct) {
+        return AstDistinctAggFunctionToWeknow[sqlAgg];
+    }
+    return AstAggFunctionToWeknow[sqlAgg];
 }
 
 export default {
@@ -343,5 +427,6 @@ export default {
     ValidWeknowOperators,
     astOperatorToWeknow,
     shouldExprCreatesCalculatedField,
-    processAstExprToWeknow
+    processAstExprToWeknow,
+    gridConfigAllowChartRender
 };

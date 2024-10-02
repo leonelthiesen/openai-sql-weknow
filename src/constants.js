@@ -39,7 +39,12 @@ export const baseGridConfig = {
         autoScroll: {
             mode: 0
         },
-        // defaultColumn
+        defaultColumn: {
+            header: {
+                visible: true,
+            },
+            sizeMode: 2
+        },
         // selection
         // showRowCount
         customLabelViews: {
