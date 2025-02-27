@@ -5,6 +5,7 @@ const router = express.Router();
 
 router.get('/conversations', chatController.getConversations);
 
+// TODO: change to start-conversation
 router.post('/startConversation', chatController.startConversation);
 
 router.get('/conversations/:id/messages', chatController.getMessagesByConversationId);

@@ -1,6 +1,5 @@
-export const SYSTEM_MESSAGE = `You are a tool to generate SQL compatible with SQLite. Return only the SQL. There is only a table called "data" and FROM statement should get only from this table.
-JOINs are not allowed.
-SQL operators between fields like "*", "-", "+", "/", etc. are not allowed.
+export const SYSTEM_MESSAGE = `You are a tool to generate SQL compatible with SQLite. Return only the SQL. There is only one table called "data" and FROM statement should get only from this table.
+JOIN, WITH and UNION clauses are not allowed.
 The SQL should use only the following fields of table "data":
 `;
 
