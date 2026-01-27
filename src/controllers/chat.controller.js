@@ -3,13 +3,52 @@ import { ObjectTypes, SYSTEM_MESSAGE } from "../constants.js";
 import chatService from "../services/chat.service.js";
 import openAiService from "../services/open-ai.service.js";
 
+/**
+ * Builds enriched field descriptions for the LLM prompt including titles, sample data, and enum options.
+ * @param {Array} metadataFields - Array of field metadata objects
+ * @returns {string} Formatted field descriptions with sample data
+ */
+const buildFieldDescriptions = (metadataFields) => {
+    return metadataFields.map((field) => {
+        let description = `${field.completeName}`;
+
+        // Add human-readable title if available
+        if (field.title) {
+            description += ` (${field.title})`;
+        }
+
+        // Prioritize formatOptions.options for enum fields (more complete)
+        if (field.formatOptions?.options && field.formatOptions.options.length > 0) {
+            const maxOptions = 5;
+            const optionSamples = field.formatOptions.options
+                .slice(0, maxOptions)
+                .map(opt => `"${opt.value}"="${opt.text}"`)
+                .join(', ');
+            const moreText = field.formatOptions.options.length > maxOptions ? ', ...' : '';
+            description += ` [Options: ${optionSamples}${moreText}]`;
+        }
+        // Otherwise, use custom sampleData if provided
+        else if (field.sampleData && Array.isArray(field.sampleData) && field.sampleData.length > 0) {
+            const maxSamples = 5;
+            const samples = field.sampleData
+                .slice(0, maxSamples)
+                .map(val => typeof val === 'string' ? `"${val}"` : val)
+                .join(', ');
+            const moreText = field.sampleData.length > maxSamples ? ', ...' : '';
+            description += ` [Examples: ${samples}${moreText}]`;
+        }
+
+        return description;
+    }).join('\n');
+};
+
 const startConversation = async (req, res) => {
     try {
         const { metadataId, userTextMessage, metadataFields } = req.body;
 
         let completeNameList = metadataFields.map((field) => field.completeName);
-        let completeNameStringList = completeNameList.join('\n');
-        let systemMessage = SYSTEM_MESSAGE + completeNameStringList;
+        let fieldDescriptions = buildFieldDescriptions(metadataFields);
+        let systemMessage = SYSTEM_MESSAGE + fieldDescriptions;
 
         let name = userTextMessage;
 

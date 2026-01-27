@@ -57,6 +57,19 @@ async function executeComponent(contents, accessToken) {
     return response.json();
 }
 
+async function executeMetadata(metadataId, accessToken) {
+    let url = getUrl('TMetadataApi/Execute');
+
+    const body = { metadataId, accessToken };
+
+    const response = await fetch(url, {
+        method: 'post',
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' }
+    });
+    return response.json();
+}
+
 async function renderComponent (config, data) {
     const browser = await puppeteer.launch({
         executablePath: process.env.CHROME_EXECUTABLE_PATH,
@@ -116,5 +129,6 @@ export default {
     authenticate,
     getMetadataSummary,
     executeComponent,
+    executeMetadata,
     renderComponent
 };
