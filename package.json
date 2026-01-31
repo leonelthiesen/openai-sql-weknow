@@ -3,28 +3,36 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch-path=src src/server.js",
-    "start-sample-msg": "node src/index.js -m \"listar todos os campos da tabela\"",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "start-sample-msg": "tsx src/index.ts -m \"listar todos os campos da tabela\"",
     "test": "vitest"
   },
   "author": "Leonel Thiesen",
   "type": "module",
   "dependencies": {
-    "body-parser": "^1.20.3",
+    "body-parser": "^2.2.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "node-fetch": "^3.3.2",
     "node-sql-parser": "^5.2.0",
-    "openai": "^4.51.0",
+    "openai": "^6.16.0",
     "postgres": "^3.4.4",
-    "puppeteer-core": "^22.11.2"
+    "puppeteer-core": "^24.36.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.5.0",
+    "@types/body-parser": "^1.19.5",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
     "eslint": "^9.5.0",
-    "globals": "^15.6.0",
-    "vitest": "^1.6.0"
+    "globals": "^17.2.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.18"
   }
 }

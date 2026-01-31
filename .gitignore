@@ -1,3 +1,7 @@
+# Build output
+dist/
+*.tsbuildinfo
+
 # Logs
 logs
 *.log
