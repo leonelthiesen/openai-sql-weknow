@@ -99,6 +99,27 @@ export function createMessage(conversationId: number, message: Message) {
   return { ...message };
 }
 
+export function updateMessage(
+  conversationId: number,
+  messageId: number,
+  content: string | OpenAIResponseSchema
+): Message | undefined {
+  const conversation = conversations.find((c) => c.id === conversationId);
+  if (!conversation || !conversation.messages) {
+    return undefined;
+  }
+
+  const message = conversation.messages.find((m) => m.id === messageId);
+  if (!message) {
+    return undefined;
+  }
+
+  message.content = content;
+  conversation.updatedAt = new Date();
+
+  return { ...message };
+}
+
 export interface FolderWithCount extends Folder {
   conversationCount: number;
 }
@@ -177,7 +198,7 @@ function extractSearchableText(conversation: Conversation): string {
       } else {
         const schema = message.content as OpenAIResponseSchema;
         parts.push(schema.message || "");
-        parts.push(schema.sql || "");
+        // parts.push(schema.query || "");
         if (schema.userMessageSuggestions) {
           parts.push(...schema.userMessageSuggestions);
         }

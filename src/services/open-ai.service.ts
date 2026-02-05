@@ -1,6 +1,7 @@
 import OpenAI from "openai";
-import { JSON_RESPONSE_SCHEMA, MODEL_INSTRUCTIONS } from "../constants";
+import { MODEL_INSTRUCTIONS } from "../constants";
 import { EasyInputMessage } from "openai/resources/responses/responses";
+import JSON_RESPONSE_SCHEMA from "../../data/llm-structured-output-json-schema.json";
 
 const OpenAiModels = {
   gpt4: "gpt-4",
@@ -23,7 +24,7 @@ export async function createModelResponse(
       format: {
         type: "json_schema",
         name: "execution_response",
-        strict: true,
+        strict: false, // Não pode ser strict por causa da propriedade chartConfig que é bastante complexa
         schema: JSON_RESPONSE_SCHEMA,
       },
       verbosity: "medium",

@@ -1,0 +1,377 @@
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "Determina o tipo de resposta baseada nas informações que o usuário passou.",
+      "enum": ["FOLLOWUP_NEEDED", "EXECUTE_QUERY"]
+    },
+    "message": {
+      "type": "string",
+      "description": "Mensagem contextualizando o retorno ou solicitando esclarecimentos, usar Markdown."
+    },
+    "userMessageSuggestions": {
+      "type": "array",
+      "description": "Lista de sugestões de como complementar o prompt, próximas ações ou análises.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "query": {
+      "type": "object",
+      "description": "Representação do SQL em formato restrito e simplificado.",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "description": "Array of column definitions",
+          "items": {
+            "type": "object",
+            "properties": {
+              "completeName": {
+                "type": "string",
+                "description": "The complete name of the field"
+              },
+              "distinct": {
+                "type": "boolean",
+                "description": "Indicates if the column values should be distinct"
+              },
+              "measureFunction": {
+                "$ref": "#/$defs/TMeasureFunction"
+              },
+              "title": {
+                "type": "string",
+                "description": "The title of the column"
+              }
+            },
+            "required": ["completeName", "distinct", "measureFunction", "title"],
+            "additionalProperties": false
+          }
+        },
+        "sort": {
+          "type": "array",
+          "description": "Array of sort definitions",
+          "items": {
+            "type": "object",
+            "properties": {
+              "completeName": {
+                "type": "string",
+                "description": "The complete name of the field to sort by"
+              },
+              "direction": {
+                "type": "number",
+                "description": "Enum for sort direction",
+                "enum": [0, 1, 2],
+                "oneOf": [{
+                    "const": 0,
+                    "title": "sdAsc",
+                    "description": "Ascending sort direction"
+                  }, {
+                    "const": 1,
+                    "title": "sdDesc",
+                    "description": "Descending sort direction"
+                  }, {
+                    "const": 2,
+                    "title": "sdNone",
+                    "description": "No sort direction"
+                  }
+                ]
+              },
+              "measureFunction": {
+                "$ref": "#/$defs/TMeasureFunction"
+              }
+            },
+            "required": ["completeName", "direction", "measureFunction"],
+            "additionalProperties": false
+          }
+        },
+        "calculatedFields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "completeName": {
+                "type": "string",
+                "description": "Required. Unique name of the calculated field."
+              },
+              "dataType": {
+                "$ref": "#/$defs/TCalculatedFieldType"
+              },
+              "formula": {
+                "type": "string",
+                "description": "Any ANSI SQL Expression"
+              },
+              "hasAggregateFunction": {
+                "type": "boolean",
+                "description": "True if the formula contains an aggregate function (SUM, COUNT, AVG, etc.)"
+              },
+              "hasAnalyticFunction": {
+                "type": "boolean",
+                "description": "True if the formula contains an analytic function (RANK, ROW_NUMBER, etc.)"
+              },
+              "title": {
+                "type": "string",
+                "description": "Friendly title for display"
+              }
+            },
+            "required": ["completeName", "formula"]
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/TWhereFilters"
+        },
+        "havingFilters": {
+          "$ref": "#/$defs/THavingFilters"
+        }
+      },
+      "required": ["columns", "sort", "filters", "havingFilters"],
+      "additionalProperties": false
+    },
+    "chartConfig": {
+      "type": "object",
+      "description": "Configuração do gráfico sugerido para visualização dos dados. Sempre compatível com Apache ECharts versão 6.",
+      "additionalProperties": {}
+    }
+  },
+  "required": ["action", "message", "userMessageSuggestions", "query", "chartConfig"],
+  "additionalProperties": false,
+  "$defs": {
+    "TMeasureFunction": {
+      "type": "number",
+      "description": "Enum for measure/aggregation functions",
+      "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      "oneOf": [{
+          "const": 0,
+          "title": "fnNone",
+          "description": "No measure function"
+        }, {
+          "const": 1,
+          "title": "fnCount",
+          "description": "Count function"
+        }, {
+          "const": 2,
+          "title": "fnDistinctCount",
+          "description": "Distinct count function"
+        }, {
+          "const": 3,
+          "title": "fnSum",
+          "description": "Sum function"
+        }, {
+          "const": 4,
+          "title": "fnMax",
+          "description": "Maximum function"
+        }, {
+          "const": 5,
+          "title": "fnMin",
+          "description": "Minimum function"
+        }, {
+          "const": 6,
+          "title": "fnAverage",
+          "description": "Average function"
+        }, {
+          "const": 7,
+          "title": "fnList",
+          "description": "List function"
+        }, {
+          "const": 8,
+          "title": "fnDistinctList",
+          "description": "Distinct list function"
+        }, {
+          "const": 9,
+          "title": "fnDistinctSum",
+          "description": "Distinct sum function"
+        }, {
+          "const": 10,
+          "title": "fnDistinctAverage",
+          "description": "Distinct average function"
+        }
+      ]
+    },
+    "TBooleanOperator": {
+      "type": "number",
+      "description": "Enum for boolean operators",
+      "enum": [0, 1],
+      "oneOf": [{
+          "const": 0,
+          "title": "boAnd",
+          "description": "AND boolean operator"
+        }, {
+          "const": 1,
+          "title": "boOr",
+          "description": "OR boolean operator"
+        }
+      ]
+    },
+    "TComparisonOperator": {
+      "type": "number",
+      "description": "Enum for comparison operators",
+      "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+      "oneOf": [{
+          "const": 0,
+          "title": "coLike",
+          "description": "LIKE operator"
+        }, {
+          "const": 1,
+          "title": "coEqual",
+          "description": "Equal operator (=)"
+        }, {
+          "const": 2,
+          "title": "coDifferent",
+          "description": "Different operator (!=)"
+        }, {
+          "const": 3,
+          "title": "coBiggerThan",
+          "description": "Greater than operator (>)"
+        }, {
+          "const": 4,
+          "title": "coBiggerOrEqualThan",
+          "description": "Greater than or equal operator (>=)"
+        }, {
+          "const": 5,
+          "title": "coLowerThan",
+          "description": "Less than operator (<)"
+        }, {
+          "const": 6,
+          "title": "coLowerOrEqualThan",
+          "description": "Less than or equal operator (<=)"
+        }, {
+          "const": 7,
+          "title": "coStartsWith",
+          "description": "Starts with operator"
+        }, {
+          "const": 8,
+          "title": "coEndsWith",
+          "description": "Ends with operator"
+        }, {
+          "const": 9,
+          "title": "coIn",
+          "description": "IN operator"
+        }, {
+          "const": 10,
+          "title": "coBetween",
+          "description": "BETWEEN operator"
+        }, {
+          "const": 11,
+          "title": "coIsNull",
+          "description": "IS NULL operator"
+        }
+      ]
+    },
+    "TCalculatedFieldType": {
+      "type": "number",
+      "description": "Enum for calculated field data types",
+      "enum": [1, 3, 6, 9, 10, 11],
+      "oneOf": [{
+          "const": 1,
+          "title": "ftString",
+          "description": "String data type"
+        }, {
+          "const": 3,
+          "title": "ftInteger",
+          "description": "Integer data type"
+        }, {
+          "const": 6,
+          "title": "ftFloat",
+          "description": "Float data type"
+        }, {
+          "const": 9,
+          "title": "ftDate",
+          "description": "Date data type"
+        }, {
+          "const": 10,
+          "title": "ftTime",
+          "description": "Time data type"
+        }, {
+          "const": 11,
+          "title": "ftDateTime",
+          "description": "DateTime data type"
+        }
+      ]
+    },
+    "TWhereFilters": {
+      "type": "object",
+      "description": "WHERE filter definition",
+      "properties": {
+        "completeName": {
+          "type": "string",
+          "description": "The complete name of the field to filter on"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TWhereFilters"
+          },
+          "description": "Recursive array of filters for nested filters"
+        },
+        "join": {
+          "$ref": "#/$defs/TBooleanOperator"
+        },
+        "not": {
+          "type": "boolean",
+          "description": "Indicates if the filter condition should be negated"
+        },
+        "operator": {
+          "$ref": "#/$defs/TComparisonOperator"
+        },
+        "values": {
+          "$ref": "#/$defs/TValues"
+        }
+      },
+      "required": ["completeName", "filters", "join", "not", "operator", "values"],
+      "additionalProperties": false
+    },
+    "THavingFilters": {
+      "type": "object",
+      "description": "HAVING filter definition",
+      "properties": {
+        "completeName": {
+          "type": "string",
+          "description": "The complete name of the field to filter on"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/THavingFilters"
+          },
+          "description": "Recursive array of filters for nested filters"
+        },
+        "join": {
+          "$ref": "#/$defs/TBooleanOperator"
+        },
+        "measureFunction": {
+          "$ref": "#/$defs/TMeasureFunction"
+        },
+        "not": {
+          "type": "boolean",
+          "description": "Indicates if the filter condition should be negated"
+        },
+        "operator": {
+          "$ref": "#/$defs/TComparisonOperator"
+        },
+        "values": {
+          "$ref": "#/$defs/TValues"
+        }
+      },
+      "required": ["completeName", "filters", "join", "measureFunction", "not", "operator", "values"],
+      "additionalProperties": false
+    },
+    "TValues": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    }
+  }
+}

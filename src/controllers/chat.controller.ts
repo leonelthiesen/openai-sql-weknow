@@ -30,53 +30,82 @@ interface AddMessageBody {
  * @param metadataFields - Array of field metadata objects
  * @returns Formatted field descriptions with sample data
  */
-const buildFieldDescriptions = (metadataFields: FieldMetadata[]): string => {
-  return metadataFields
+// const buildFieldDescriptions = (metadataFields: FieldMetadata[]): string => {
+//   return metadataFields
+//     .map((field) => {
+//       let description = `${field.completeName}`;
+
+//       // Add human-readable title if available
+//       if (field.title) {
+//         description += ` (${field.title})`;
+//       }
+
+//       // Prioritize formatOptions.options for enum fields (more complete)
+//       if (field.formatOptions?.options && field.formatOptions.options.length > 0) {
+//         const maxOptions = 5;
+//         const optionSamples = field.formatOptions.options
+//           .slice(0, maxOptions)
+//           .map((opt) => `"${opt.value}"="${opt.text}"`)
+//           .join(", ");
+//         const moreText = field.formatOptions.options.length > maxOptions ? ", ..." : "";
+//         description += ` [Options: ${optionSamples}${moreText}]`;
+//       }
+//       // Otherwise, use custom sampleData if provided
+//       else if (field.sampleData && Array.isArray(field.sampleData) && field.sampleData.length > 0) {
+//         const maxSamples = 5;
+//         const samples = field.sampleData
+//           .slice(0, maxSamples)
+//           .map((val) => (typeof val === "string" ? `"${val}"` : val))
+//           .join(", ");
+//         const moreText = field.sampleData.length > maxSamples ? ", ..." : "";
+//         description += ` [Examples: ${samples}${moreText}]`;
+//       }
+
+//       return description;
+//     })
+//     .join("\n");
+// };
+
+/**
+ * Builds enriched field descriptions for the LLM prompt including titles, sample data, and enum options.
+ * @param metadataFields - Array of field metadata objects
+ * @returns Formatted field descriptions with sample data
+ */
+const buildFieldsJsonString = (metadataFields: FieldMetadata[]): string => {
+  let outFields = metadataFields
     .map((field) => {
-      let description = `${field.completeName}`;
+        let outField: any = {
+            completeName: field.completeName,
+            title: field.title,
+        };
 
-      // Add human-readable title if available
-      if (field.title) {
-        description += ` (${field.title})`;
-      }
-
-      // Prioritize formatOptions.options for enum fields (more complete)
+          // Prioritize formatOptions.options for enum fields (more complete)
       if (field.formatOptions?.options && field.formatOptions.options.length > 0) {
         const maxOptions = 5;
-        const optionSamples = field.formatOptions.options
-          .slice(0, maxOptions)
-          .map((opt) => `"${opt.value}"="${opt.text}"`)
-          .join(", ");
-        const moreText = field.formatOptions.options.length > maxOptions ? ", ..." : "";
-        description += ` [Options: ${optionSamples}${moreText}]`;
+        outField.options = field.formatOptions.options.slice(0, maxOptions);
       }
       // Otherwise, use custom sampleData if provided
       else if (field.sampleData && Array.isArray(field.sampleData) && field.sampleData.length > 0) {
         const maxSamples = 5;
-        const samples = field.sampleData
-          .slice(0, maxSamples)
-          .map((val) => (typeof val === "string" ? `"${val}"` : val))
-          .join(", ");
-        const moreText = field.sampleData.length > maxSamples ? ", ..." : "";
-        description += ` [Examples: ${samples}${moreText}]`;
+        outField.sampleData = field.sampleData.slice(0, maxSamples);
       }
-
-      return description;
-    })
-    .join("\n");
+      return outField;
+    });
+    return JSON.stringify(outFields, null, 2);
 };
+
 
 export const startConversation = async (req: Request<{}, {}, StartConversationBody>, res: Response) => {
   try {
     const { metadataId, userTextMessage, metadataFields } = req.body;
 
     // let completeNameList = metadataFields.map((field) => field.completeName);
-    const fieldDescriptions = buildFieldDescriptions(metadataFields);
+    const fieldDescriptions = buildFieldsJsonString(metadataFields);
 
     // TODO: Talvez seja melhor ter um tipo específico para o input aqui
     const input: EasyInputMessage[] = [
         {
-            role: "developer",
+            role: "system",
             content: `Os campos disponíveis para considerar na tabela virtual são: \n${fieldDescriptions}`
         },
         {
@@ -175,16 +204,22 @@ export const addUserMessageToConversation = async (
     const messages = chatService.getMessagesByConversationId(parseInt(id));
 
     let input: EasyInputMessage[] = messages.map((msg) => {
+        let textMsg = msg.content;
+        if (typeof msg.content !== "string") {
+            textMsg = JSON.stringify(msg.content);
+        }
         return {
             role: msg.role,
-            content: msg.content,
+            content: textMsg,
         } as EasyInputMessage;
     });
 
-    input.push({
-        role: "user",
-        content: userTextMessage,
-    });
+    // input.push({
+    //     role: "user",
+    //     content: userTextMessage,
+    // });
+
+    console.log("Input para LLM:", input);
 
     const modelResponse = await openAiService.createModelResponse(input);
 
@@ -304,6 +339,34 @@ export const searchConversations = async (req: Request, res: Response) => {
     return res.json(results);
   } catch (error: any) {
     return res.status(500).json({ message: "Erro ao buscar conversas.", error: error.message });
+  }
+};
+
+export const updateMessage = async (
+  req: Request<{ conversationId: string; messageId: string }, {}, { content: string | OpenAIResponseSchema }>,
+  res: Response
+) => {
+  try {
+    const { conversationId, messageId } = req.params;
+    const { content } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ message: "Conteúdo da mensagem é obrigatório." });
+    }
+
+    const updatedMessage = chatService.updateMessage(
+      parseInt(conversationId),
+      parseInt(messageId),
+      content
+    );
+
+    if (!updatedMessage) {
+      return res.status(404).json({ message: "Conversa ou mensagem não encontrada." });
+    }
+
+    return res.json(updatedMessage);
+  } catch (error: any) {
+    return res.status(500).json({ message: "Erro ao atualizar mensagem.", error: error.message });
   }
 };
 
