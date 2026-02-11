@@ -1,1 +1,0 @@
-# openai-sql-weknow
