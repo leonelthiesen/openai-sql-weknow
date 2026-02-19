@@ -8,7 +8,7 @@
     },
     "message": {
       "type": "string",
-      "description": "Message providing context or requesting clarification, use Markdown."
+      "description": "Message providing user response or requesting clarification, use Markdown."
     },
     "userMessageSuggestions": {
       "type": "array",
@@ -23,7 +23,7 @@
       "properties": {
         "columns": {
           "type": "array",
-          "description": "Array of column definitions",
+          "description": "Array of column definitions, always use the 'completeName' of the provided fields or calculated fields as the identifier.",
           "items": {
             "type": "object",
             "properties": {
@@ -49,13 +49,13 @@
         },
         "sort": {
           "type": "array",
-          "description": "Array of sort definitions",
+          "description": "Array of sort definitions, always use the 'completeName' of the provided fields or calculated fields as the identifier.",
           "items": {
             "type": "object",
             "properties": {
               "completeName": {
                 "type": "string",
-                "description": "The completeName of the field to sort by, must match one of the columns' completeName"
+                "description": "The completeName of the field to sort by, must match one of the column's completeName"
               },
               "direction": {
                 "type": "number",
@@ -86,7 +86,7 @@
         },
         "calculatedFields": {
           "type": "array",
-          "description": "Array of calculated fields (ANSI SQL Expressions), that can be used in columns, sort, filters, and havingFilters, always referenced by their completeName.",
+          "description": "Array of calculated fields (ANSI SQL Expressions), that can be used in columns, sort, filters, and havingFilters, always referenced by their 'completeName'.",
           "items": {
             "type": "object",
             "properties": {
@@ -129,7 +129,7 @@
     },
     "chartConfig": {
       "type": "object",
-      "description": "Configuração do gráfico sugerido para visualização dos dados. Sempre compatível com Apache ECharts versão 6.",
+      "description": "Apache EChats version 6 configuration to visualize data.",
       "additionalProperties": {}
     }
   },
@@ -138,7 +138,7 @@
   "$defs": {
     "TMeasureFunction": {
       "type": "number",
-      "description": "Enum for measure/aggregation functions",
+      "description": "Enum for measure/aggregation functions, use fnNone when referencing calculated fields with aggregation.",
       "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
       "oneOf": [{
           "const": 0,
