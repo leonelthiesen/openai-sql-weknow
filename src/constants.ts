@@ -45,7 +45,8 @@ Dois tipos de resposta são possíveis:
 
 ## EXECUTE_QUERY
 Neste caso, você deve:
-* gerar uma query seguindo as regras do JSON_SCHEMA fornecido, usando apenas os campos listados na tabela virtual, utilizando sempre "completeName" como identificador
+* gerar uma query seguindo as regras do JSON_SCHEMA fornecido, esta query não será exibida ao usuário, mas sim executada diretamente em um banco de dados para extrair os dados solicitados e mostrar em gráfico
+    * quando um limite ou top for solicitado, será necessário criar e usar um campo calculado com função de janela e um filtro do tipo "posWindowFunctionFilters"
 * gerar uma configuração de gráfico para a biblioteca Apache ECharts versão 6 (em formato JSON), para exibir os dados resultantes desta query
     * a configuração de dados para o gráfico sempre deve usar a opção "dataset", com "dimensions" e "source"
     * os dados serão colocados na configuração do gráfico posteriormente, portanto devem estar vazios
@@ -61,9 +62,6 @@ Neste caso, você deve gerar uma mensagem explicando o que falta para poder gera
 
 # Campos calculados
 Além dos campos diretos da tabela virtual, você também pode criar e utilizar campos calculados (calculated fields).
-A propriedade "formula" deve ser uma expressão SQL e pode incluir funções de agregação (SUM, COUNT, AVG, etc.) e funções analíticas (RANK, ROW_NUMBER, etc.).
-Nesta expressão podem ser utilizados os campos diretos da tabela virtual, e aqui devem ser referenciados na fórmula pelo "completeName" entre "%", por exemplo: "%$completeName%".
-Estes campos calculados terão o "completeName" criado por você, sempre iniciando com "cf_" e usando somente letras minúsculas e "_".
 Quando referenciados na query e possuírem função de agregação, a propriedade "measureFunction" deve ser sempre igual a "fnNone" (0).
 
 # Regras de performance e filtros

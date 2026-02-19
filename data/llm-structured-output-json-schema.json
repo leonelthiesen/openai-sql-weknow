@@ -3,76 +3,72 @@
   "properties": {
     "action": {
       "type": "string",
-      "description": "Determines the type of response based on the information provided by the user.",
+      "description": "Determina o tipo da resposta com base nas informações fornecidas pelo usuário.",
       "enum": ["FOLLOWUP_NEEDED", "EXECUTE_QUERY"]
     },
     "message": {
       "type": "string",
-      "description": "Message providing user response or requesting clarification, use Markdown."
+      "description": "Mensagem com a resposta ao usuário ou pedindo mais informações. Use Markdown."
     },
     "userMessageSuggestions": {
       "type": "array",
-      "description": "List of suggestions on how to complement the prompt, next actions, or analyses.",
+      "description": "Lista de sugestões sobre como complementar o prompt, ações subsequentes ou análises.",
       "items": {
         "type": "string"
       }
     },
     "query": {
       "type": "object",
-      "description": "Query definitions including columns, sorting, filters, and calculated fields.",
+      "description": "Definições da query: colunas, ordenação, campos calculados, filtros e filtros pós agrupamento (having).",
       "properties": {
         "columns": {
           "type": "array",
-          "description": "Array of column definitions, always use the 'completeName' of the provided fields or calculated fields as the identifier.",
+          "description": "Lista de definições de colunas.",
           "items": {
             "type": "object",
             "properties": {
               "completeName": {
                 "type": "string",
-                "description": "The complete name of the field"
-              },
-              "distinct": {
-                "type": "boolean",
-                "description": "Indicates if the column values should be distinct"
+                "description": "Usar o 'completeName' dos campos fornecidos ou dos campos calculados."
               },
               "measureFunction": {
                 "$ref": "#/$defs/TMeasureFunction"
               },
               "title": {
                 "type": "string",
-                "description": "The title of the column"
+                "description": "O título amigável da coluna para fins de exibição."
               }
             },
-            "required": ["completeName", "distinct", "measureFunction", "title"],
+            "required": ["completeName", "measureFunction", "title"],
             "additionalProperties": false
           }
         },
         "sort": {
           "type": "array",
-          "description": "Array of sort definitions, always use the 'completeName' of the provided fields or calculated fields as the identifier.",
+          "description": "Lista de definições de ordenação.",
           "items": {
             "type": "object",
             "properties": {
               "completeName": {
                 "type": "string",
-                "description": "The completeName of the field to sort by, must match one of the column's completeName"
+                "description": "Usar o 'completeName' dos campos fornecidos ou dos campos calculados."
               },
               "direction": {
                 "type": "number",
-                "description": "Enum for sort direction",
+                "description": "Enum para a direção da ordenação",
                 "enum": [0, 1, 2],
                 "oneOf": [{
                     "const": 0,
                     "title": "sdAsc",
-                    "description": "Ascending sort direction"
+                    "description": "Crescente"
                   }, {
                     "const": 1,
                     "title": "sdDesc",
-                    "description": "Descending sort direction"
+                    "description": "Decrescente"
                   }, {
                     "const": 2,
                     "title": "sdNone",
-                    "description": "No sort direction"
+                    "description": "Sem direção de ordenação"
                   }
                 ]
               },
@@ -86,32 +82,32 @@
         },
         "calculatedFields": {
           "type": "array",
-          "description": "Array of calculated fields (ANSI SQL Expressions), that can be used in columns, sort, filters, and havingFilters, always referenced by their 'completeName'.",
+          "description": "Lista de campos calculados (Expressões ANSI SQL) que podem ser usados em colunas, ordenação, filtros e filtros pós agrupamento (having filters), onde devem ser referenciados pelo 'completeName' do campo calculado.",
           "items": {
             "type": "object",
             "properties": {
               "completeName": {
                 "type": "string",
-                "description": "Required. Unique name of the calculated field."
+                "description": "Criar nome único sempre iniciando com 'cf_' e usando somente letras minúsculas e '_'."
               },
               "dataType": {
                 "$ref": "#/$defs/TCalculatedFieldType"
               },
               "formula": {
                 "type": "string",
-                "description": "Any ANSI SQL Expression"
+                "description": "Expressão ANSI SQL que pode conter funções de agregação (SUM, COUNT, AVG, etc.) e funções analíticas (RANK, ROW_NUMBER, etc.). Os campos fornecidos podem ser referenciados pelo 'completeName' entre '%', por exemplo: '%$completeName%'."
               },
               "hasAggregateFunction": {
                 "type": "boolean",
-                "description": "True if the formula contains an aggregate function (SUM, COUNT, AVG, etc.)"
+                "description": "Define se a fórmula contém uma função de agregação (SUM, COUNT, AVG, etc.)"
               },
               "hasAnalyticFunction": {
                 "type": "boolean",
-                "description": "True if the formula contains an analytic function (RANK, ROW_NUMBER, etc.)"
+                "description": "Define se a fórmula contém uma função de janela (window function) como RANK, ROW_NUMBER, etc."
               },
               "title": {
                 "type": "string",
-                "description": "Friendly title for display"
+                "description": "Título amigável para exibição"
               }
             },
             "required": ["completeName", "formula"]
@@ -122,14 +118,17 @@
         },
         "havingFilters": {
           "$ref": "#/$defs/THavingFilters"
+        },
+        "posWindowFunctionFilters": {
+          "$ref": "#/$defs/TPosWindowFunctionFilter"
         }
       },
-      "required": ["columns", "sort", "filters", "havingFilters"],
+      "required": ["columns", "sort", "filters", "havingFilters", "posWindowFunctionFilters"],
       "additionalProperties": false
     },
     "chartConfig": {
       "type": "object",
-      "description": "Apache EChats version 6 configuration to visualize data.",
+      "description": "Configuração do Apache ECharts version 6 para visualização dos dados resultantes da query.",
       "additionalProperties": {}
     }
   },
@@ -138,177 +137,177 @@
   "$defs": {
     "TMeasureFunction": {
       "type": "number",
-      "description": "Enum for measure/aggregation functions, use fnNone when referencing calculated fields with aggregation.",
+      "description": "Enum para medidas e funções de agregação, usar fnNone quando estiver referenciando um campo calculado com agregação.",
       "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
       "oneOf": [{
           "const": 0,
           "title": "fnNone",
-          "description": "No measure function"
+          "description": "Sem função de agregação"
         }, {
           "const": 1,
           "title": "fnCount",
-          "description": "Count function"
+          "description": "Função contar"
         }, {
           "const": 2,
           "title": "fnDistinctCount",
-          "description": "Distinct count function"
+          "description": "Função contar distinto"
         }, {
           "const": 3,
           "title": "fnSum",
-          "description": "Sum function"
+          "description": "Função soma"
         }, {
           "const": 4,
           "title": "fnMax",
-          "description": "Maximum function"
+          "description": "Função máximo"
         }, {
           "const": 5,
           "title": "fnMin",
-          "description": "Minimum function"
+          "description": "Função mínimo"
         }, {
           "const": 6,
           "title": "fnAverage",
-          "description": "Average function"
+          "description": "Função média"
         }, {
           "const": 7,
           "title": "fnList",
-          "description": "List function"
+          "description": "Função lista"
         }, {
           "const": 8,
           "title": "fnDistinctList",
-          "description": "Distinct list function"
+          "description": "Função lista distinta"
         }, {
           "const": 9,
           "title": "fnDistinctSum",
-          "description": "Distinct sum function"
+          "description": "Função soma distinta"
         }, {
           "const": 10,
           "title": "fnDistinctAverage",
-          "description": "Distinct average function"
+          "description": "Função média distinta"
         }
       ]
     },
     "TBooleanOperator": {
       "type": "number",
-      "description": "Enum for boolean operators",
+      "description": "Enum para operadores booleanos",
       "enum": [0, 1],
       "oneOf": [{
           "const": 0,
           "title": "boAnd",
-          "description": "AND boolean operator"
+          "description": "Operador booleano AND"
         }, {
           "const": 1,
           "title": "boOr",
-          "description": "OR boolean operator"
+          "description": "Operador booleano OR"
         }
       ]
     },
     "TComparisonOperator": {
       "type": "number",
-      "description": "Enum for comparison operators",
+      "description": "Enum para operadores de comparação",
       "enum": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
       "oneOf": [{
           "const": 0,
           "title": "coLike",
-          "description": "LIKE operator"
+          "description": "Operador LIKE"
         }, {
           "const": 1,
           "title": "coEqual",
-          "description": "Equal operator (=)"
+          "description": "Operador igual (=)"
         }, {
           "const": 2,
           "title": "coDifferent",
-          "description": "Different operator (!=)"
+          "description": "Operador diferente (!=)"
         }, {
           "const": 3,
           "title": "coBiggerThan",
-          "description": "Greater than operator (>)"
+          "description": "Operador maior que (>)"
         }, {
           "const": 4,
           "title": "coBiggerOrEqualThan",
-          "description": "Greater than or equal operator (>=)"
+          "description": "Operador maior ou igual a (>=)"
         }, {
           "const": 5,
           "title": "coLowerThan",
-          "description": "Less than operator (<)"
+          "description": "Operador menor que (<)"
         }, {
           "const": 6,
           "title": "coLowerOrEqualThan",
-          "description": "Less than or equal operator (<=)"
+          "description": "Operador menor ou igual a (<=)"
         }, {
           "const": 7,
           "title": "coStartsWith",
-          "description": "Starts with operator"
+          "description": "Operador começa com (Starts with operator)"
         }, {
           "const": 8,
           "title": "coEndsWith",
-          "description": "Ends with operator"
+          "description": "Operador termina com (Ends with operator)"
         }, {
           "const": 9,
           "title": "coIn",
-          "description": "IN operator"
+          "description": "Operador IN"
         }, {
           "const": 10,
           "title": "coBetween",
-          "description": "BETWEEN operator"
+          "description": "Operador BETWEEN"
         }, {
           "const": 11,
           "title": "coIsNull",
-          "description": "IS NULL operator"
+          "description": "Operador IS NULL"
         }
       ]
     },
     "TCalculatedFieldType": {
       "type": "number",
-      "description": "Enum for calculated field data types",
+      "description": "Enum para tipos de dados dos campos calculados",
       "enum": [1, 3, 6, 9, 10, 11],
       "oneOf": [{
           "const": 1,
           "title": "ftString",
-          "description": "String data type"
+          "description": "String"
         }, {
           "const": 3,
           "title": "ftInteger",
-          "description": "Integer data type"
+          "description": "Integer"
         }, {
           "const": 6,
           "title": "ftFloat",
-          "description": "Float data type"
+          "description": "Float"
         }, {
           "const": 9,
           "title": "ftDate",
-          "description": "Date data type"
+          "description": "Date"
         }, {
           "const": 10,
           "title": "ftTime",
-          "description": "Time data type"
+          "description": "Time"
         }, {
           "const": 11,
           "title": "ftDateTime",
-          "description": "DateTime data type"
+          "description": "DateTime"
         }
       ]
     },
     "TWhereFilters": {
       "type": "object",
-      "description": "WHERE filter definition",
+      "description": "Definições dos filtros WHERE, que podem ser aninhados recursivamente para representar condições complexas.",
       "properties": {
         "completeName": {
           "type": "string",
-          "description": "The complete name of the field to filter on"
+          "description": "Usar o 'completeName' dos campos fornecidos ou dos campos calculados."
         },
         "filters": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/TWhereFilters"
           },
-          "description": "Recursive array of filters for nested filters"
+          "description": "Lista recursiva para filtros aninhados"
         },
         "join": {
           "$ref": "#/$defs/TBooleanOperator"
         },
         "not": {
           "type": "boolean",
-          "description": "Indicates if the filter condition should be negated"
+          "description": "Indica se a condição do filtro deve ser negada"
         },
         "operator": {
           "$ref": "#/$defs/TComparisonOperator"
@@ -322,18 +321,18 @@
     },
     "THavingFilters": {
       "type": "object",
-      "description": "HAVING filter definition",
+      "description": "Definições de filtros HAVING, que podem ser aninhados recursivamente para representar condições complexas pós agrupamento.",
       "properties": {
         "completeName": {
           "type": "string",
-          "description": "The complete name of the field to filter on"
+          "description": "Usar o 'completeName' dos campos fornecidos ou dos campos calculados."
         },
         "filters": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/THavingFilters"
           },
-          "description": "Recursive array of filters for nested filters"
+          "description": "Lista recursiva para filtros aninhados"
         },
         "join": {
           "$ref": "#/$defs/TBooleanOperator"
@@ -343,7 +342,42 @@
         },
         "not": {
           "type": "boolean",
-          "description": "Indicates if the filter condition should be negated"
+          "description": "Indica se a condição do filtro deve ser negada"
+        },
+        "operator": {
+          "$ref": "#/$defs/TComparisonOperator"
+        },
+        "values": {
+          "$ref": "#/$defs/TValues"
+        }
+      },
+      "required": ["completeName", "filters", "join", "measureFunction", "not", "operator", "values"],
+      "additionalProperties": false
+    },
+    "TPosWindowFunctionFilter": {
+      "type": "object",
+      "description": "Definições de filtros que utilizam funções de janela (window functions) e campos calculados quando 'hasAnalyticFunction' é true.",
+      "properties": {
+        "completeName": {
+          "type": "string",
+          "description": "Usar o 'completeName' dos campos fornecidos ou dos campos calculados."
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TPosWindowFunctionFilter"
+          },
+          "description": "Lista recursiva para filtros aninhados"
+        },
+        "join": {
+          "$ref": "#/$defs/TBooleanOperator"
+        },
+        "measureFunction": {
+          "$ref": "#/$defs/TMeasureFunction"
+        },
+        "not": {
+          "type": "boolean",
+          "description": "Indica se a condição do filtro deve ser negada"
         },
         "operator": {
           "$ref": "#/$defs/TComparisonOperator"
