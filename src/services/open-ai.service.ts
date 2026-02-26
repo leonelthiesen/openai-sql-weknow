@@ -5,7 +5,9 @@ import JSON_RESPONSE_SCHEMA from "../../data/llm-structured-output-json-schema.j
 
 const OpenAiModels = {
   gpt4: "gpt-4",
+  gpt41Nano: "gpt-4.1-nano-2025-04-14",
   gpt35Turbo: "gpt-3.5-turbo",
+  gpt5Nano: "gpt-5-nano-2025-08-07",
   gpt5Mini: "gpt-5-mini-2025-08-07",
 } as const;
 
@@ -29,6 +31,7 @@ export async function createModelResponse(
       },
       verbosity: "medium",
     },
+    // temperature: 0.2,
     reasoning: {
       effort: "minimal",
     },
