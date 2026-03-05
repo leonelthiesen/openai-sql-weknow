@@ -126,13 +126,18 @@
       "required": ["columns", "sort", "filters", "havingFilters", "posWindowFunctionFilters"],
       "additionalProperties": false
     },
+    "renderType": {
+      "type": "string",
+      "description": "Determines how the query result data should be rendered. Use CHART for graphical visualizations, TABLE for tabular data display, or TEXT when the answer can be conveyed as a simple text message (e.g., a single value or summary).",
+      "enum": ["CHART", "TABLE", "TEXT"]
+    },
     "chartConfig": {
       "type": "object",
-      "description": "Apache ECharts version 6 configuration for visualizing the query result data.",
+      "description": "Apache ECharts version 6 configuration for visualizing the query result data. Required only when renderType is CHART.",
       "additionalProperties": {}
     }
   },
-  "required": ["action", "message", "userMessageSuggestions", "query", "chartConfig"],
+  "required": ["action", "message", "userMessageSuggestions", "query", "renderType"],
   "additionalProperties": false,
   "$defs": {
     "TMeasureFunction": {

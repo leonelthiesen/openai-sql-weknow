@@ -47,10 +47,18 @@ Two response types are possible: EXECUTE_QUERY and FOLLOWUP_NEEDED.
 
 ## EXECUTE_QUERY
 
-In this case, you must:
-* generate a query following the rules of the provided JSON_SCHEMA; this query will not be shown to the user, but will be executed directly in a database to extract the requested data and render a chart
+When the action is EXECUTE_QUERY, you must:
+* choose a "renderType" that determines how the result is presented to the user. The three options are: CHART, TABLE, and TEXT.
+* generate a query following the rules of the provided JSON_SCHEMA
+  * this query will not be shown to the user
+  * this query will be executed after your response and the resulting data will be used to replace the "{{DATA_PLACEHOLDER}}" in the "message" property, so pretend the data is already available when writing the message
   * when a limit or top is requested, you must create and use a calculated field with a window function and a filter of type "posWindowFunctionFilters"
-* generate a chart configuration for Apache ECharts version 6 (in JSON format) to display the data resulting from this query
+
+### renderType: CHART
+
+Use this when the data is best visualized as a graphical chart.
+In this case, you must:
+* generate a chart configuration for Apache ECharts version 6 (in JSON format) in the "chartConfig" property to display the data resulting from this query
   * the chart data configuration must always use the "dataset" option, with "dimensions" and "source"
   * the data will be inserted into the chart configuration later, so they must be empty
   * use the same field names (completeName) to define the dataset dimensions and the data in the configuration in general
@@ -59,6 +67,18 @@ In this case, you must:
   * the chart title must have padding so it does not stick to the chart (e.g., padding: [10, 0, 30, 0])
   * axis titles should be displayed centered and vertically
 * insert the placeholder "{{DATA_PLACEHOLDER}}" in the markdown of the "message" property, where the chart with data will be displayed. It must be placed in its own paragraph only once. If you need to reference this placeholder in the message, use the word "data" or "chart", for example: "here is the chart with the data".
+
+### renderType: TABLE
+
+Use this when the data is best presented as a structured table (e.g., listings, detailed records, multi-column comparisons).
+In this case, you must:
+* insert the placeholder "{{DATA_PLACEHOLDER}}" in the markdown of the "message" property, where the table with data will be displayed. It must be placed in its own paragraph only once. If you need to reference this placeholder in the message, use the word "data" or "table", for example: "here is the table with the data".
+
+### renderType: TEXT
+
+Use this when the answer can be conveyed as a simple text in the message itself (e.g., a single aggregated value, a short summary, or a yes/no answer).
+In this case, you must:
+* insert the placeholder "{{DATA_PLACEHOLDER}}" in the markdown of the "message" property in a user-friendly way. The query result data will be replace the placeholder, so pretend the data is already available.
 
 ## FOLLOWUP_NEEDED
 
@@ -81,9 +101,11 @@ When referenced in the query and they contain an aggregation function, the "meas
 
 export interface OpenAIResponseSchema {
   action: "FOLLOWUP_NEEDED" | "EXECUTE_QUERY";
+  renderType?: "CHART" | "TABLE" | "TEXT";
   message: string;
   userMessageSuggestions: string[];
   query: Object;
+  chartConfig?: Object;
 }
 
 export const JSON_RESPONSE_SCHEMA = {
