@@ -2,10 +2,17 @@ import { MODEL_INSTRUCTIONS, OpenAIResponseSchema } from "../constants";
 import type { MetadataField } from "./sql-create-statement.service";
 
 
+export interface ToolCallInfo {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
 export interface Message {
   id?: number;
   role: "developer" | "user" | "assistant";
   content: string | OpenAIResponseSchema;
+  toolCall?: ToolCallInfo;
 }
 
 export interface Folder {

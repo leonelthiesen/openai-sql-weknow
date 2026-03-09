@@ -3,7 +3,7 @@ import { OpenAIResponseSchema } from "../constants";
 import * as chatService from "../services/chat.service";
 import * as openAiService from "../services/open-ai.service";
 import type { MetadataField } from "../services/sql-create-statement.service";
-import { EasyInputMessage } from "openai/resources/responses/responses";
+import type { ResponseInputItem } from "openai/resources/responses/responses";
 
 interface FieldMetadata extends MetadataField {
   title?: string;
@@ -95,69 +95,86 @@ const buildFieldsJsonString = (metadataFields: FieldMetadata[]): string => {
 };
 
 
+/**
+ * Converts stored conversation messages into the proper OpenAI Responses API input format,
+ * including function_call and function_call_output items for tool call history.
+ */
+function buildOpenAIInput(messages: chatService.Message[]): ResponseInputItem[] {
+  const input: ResponseInputItem[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === "user" || msg.role === "developer") {
+      input.push({
+        role: msg.role === "developer" ? "developer" : "user",
+        content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
+      } as ResponseInputItem);
+    } else if (msg.role === "assistant") {
+      if (msg.toolCall) {
+        // Replay the function call from the assistant
+        input.push({
+          type: "function_call",
+          call_id: msg.toolCall.id,
+          name: msg.toolCall.name,
+          arguments: msg.toolCall.arguments,
+        } as ResponseInputItem);
+        // Provide a confirmation output (data is NOT returned to the LLM)
+        input.push({
+          type: "function_call_output",
+          call_id: msg.toolCall.id,
+          output: msg.toolCall.name === "execute_query"
+            ? "Query executed successfully. Results rendered to the user."
+            : "Message delivered to the user.",
+        } as ResponseInputItem);
+      } else {
+        const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+        input.push({ role: "assistant", content } as ResponseInputItem);
+      }
+    }
+  }
+
+  return input;
+}
+
 export const startConversation = async (req: Request<{}, {}, StartConversationBody>, res: Response) => {
   try {
     const { metadataId, userTextMessage, metadataFields } = req.body;
 
-    // let completeNameList = metadataFields.map((field) => field.completeName);
     const fieldDescriptions = buildFieldsJsonString(metadataFields);
 
-    // TODO: Talvez seja melhor ter um tipo específico para o input aqui
-    const input: EasyInputMessage[] = [
-        {
-            role: "system",
-            content: `Os campos disponíveis para considerar na tabela virtual são: \n${fieldDescriptions}`
-        },
-        {
-            role: "user",
-            content: userTextMessage
-        }
+    const initialMessages: chatService.Message[] = [
+      {
+        role: "developer",
+        content: `Os campos disponíveis para considerar na tabela virtual são: \n${fieldDescriptions}`,
+      },
+      {
+        role: "user",
+        content: userTextMessage,
+      },
     ];
 
     const newConversation = chatService.createConversation(
       metadataId,
       metadataFields,
-      input.map((msg) => {
-        return {
-          role: msg.role,
-          content: msg.content,
-        } as chatService.Message;
-      })
+      initialMessages
     );
 
-    const newUserMessage = input[1];
+    const input = buildOpenAIInput(initialMessages);
+    const { structuredOutput, toolCallId, toolCallName, toolCallArguments } =
+      await openAiService.createModelResponse(input);
 
-    const modelResponse = await openAiService.createModelResponse(input);
-
-    console.log("LLM Completion:", modelResponse);
-
-    let outputText = modelResponse.output_text;
-    let structuredOutput = JSON.parse(outputText) as OpenAIResponseSchema;
-
-
-    // let tableConfigs = astToWeknowService.createWeknowConfigFromSql(metadataId, ObjectTypes.Table, completeNameList, completionSql);
-    // let weknowGridConfig = tableConfigs.weknowConfig;
-
-    // let allowChart = astToWeknowService.gridConfigAllowChartRender(weknowGridConfig);
-
-    // let weknowChartConfig;
-    // if (allowChart) {
-    //     let chartConfigs = astToWeknowService.createWeknowConfigFromSql(metadataId, ObjectTypes.Chart, completeNameList, completionSql);
-    //     weknowChartConfig = chartConfigs.weknowConfig;
-    // }
-
-    const modelResponseMessage: chatService.Message = {
+    const newBotMessage = chatService.createMessage(newConversation.id, {
       role: "assistant",
       content: structuredOutput,
-    };
-    const newBotMessage = chatService.createMessage(
-      newConversation.id,
-      modelResponseMessage
-    );
+      toolCall: {
+        id: toolCallId,
+        name: toolCallName,
+        arguments: toolCallArguments,
+      },
+    });
 
     return res.status(201).json({
       newConversation,
-      newUserMessage,
+      newUserMessage: initialMessages[1],
       newBotMessage,
     });
   } catch (error: any) {
@@ -198,37 +215,26 @@ export const addUserMessageToConversation = async (
     }
 
     const newUserMessage = chatService.createMessage(parseInt(id), {
-        role: "user",
-        content: userTextMessage,
+      role: "user",
+      content: userTextMessage,
     });
+
     const messages = chatService.getMessagesByConversationId(parseInt(id));
+    const input = buildOpenAIInput(messages);
 
-    let input: EasyInputMessage[] = messages.map((msg) => {
-        let textMsg = msg.content;
-        if (typeof msg.content !== "string") {
-            textMsg = JSON.stringify(msg.content);
-        }
-        return {
-            role: msg.role,
-            content: textMsg,
-        } as EasyInputMessage;
-    });
+    console.log("Input para LLM:", JSON.stringify(input, null, 2));
 
-    // input.push({
-    //     role: "user",
-    //     content: userTextMessage,
-    // });
-
-    console.log("Input para LLM:", input);
-
-    const modelResponse = await openAiService.createModelResponse(input);
-
-    let outputText = modelResponse.output_text;
-    let structuredOutput = JSON.parse(outputText) as OpenAIResponseSchema;
+    const { structuredOutput, toolCallId, toolCallName, toolCallArguments } =
+      await openAiService.createModelResponse(input);
 
     const newBotMessage = chatService.createMessage(parseInt(id), {
       role: "assistant",
       content: structuredOutput,
+      toolCall: {
+        id: toolCallId,
+        name: toolCallName,
+        arguments: toolCallArguments,
+      },
     });
 
     return res.status(201).json({ newUserMessage, newBotMessage });
