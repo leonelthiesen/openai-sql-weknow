@@ -1,12 +1,9 @@
 import { expect, test, vi, beforeEach, afterEach } from "vitest";
 import { authenticate } from "./weknow.service";
 import fetch from "node-fetch";
-import crypto from "crypto";
-import puppeteer from "puppeteer-core";
 
 // Mock dependencies
 vi.mock("node-fetch");
-vi.mock("puppeteer-core");
 
 // Mock environment variables
 const mockEnv = {
@@ -14,7 +11,6 @@ const mockEnv = {
   WEKNOW_PASSWORD_SALT: "test-salt",
   WEKNOW_ACCOUNT_TOKEN: "test-account-token",
   WEKNOW_API_PORT: "8080",
-  CHROME_EXECUTABLE_PATH: "/path/to/chrome",
 };
 
 beforeEach(() => {

@@ -1,5 +1,4 @@
-import { MODEL_INSTRUCTIONS, OpenAIResponseSchema } from "../constants";
-import type { MetadataField } from "./sql-create-statement.service";
+import { MetadataField, MODEL_INSTRUCTIONS, OpenAIResponseSchema } from "../constants";
 
 
 export interface ToolCallInfo {

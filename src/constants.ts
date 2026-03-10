@@ -110,6 +110,11 @@ export interface ExecuteQueryResponse {
   chartConfig?: object;
 }
 
+export interface MetadataField {
+  completeName: string;
+  fieldType: string;
+}
+
 export interface AskFollowupResponse {
   action: "FOLLOWUP_NEEDED";
   message: string;

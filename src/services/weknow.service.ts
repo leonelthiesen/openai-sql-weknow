@@ -2,8 +2,6 @@
 
 import fetch from "node-fetch";
 import crypto from "crypto";
-import puppeteer, { Browser, Page } from "puppeteer-core";
-import { ObjectTypes, GridConfig, ChartConfig } from "../constants";
 
 interface MetadataSummaryCache {
   [metadataId: number]: any;
@@ -92,74 +90,4 @@ export async function executeMetadata(metadataId: number, accessToken: string): 
     headers: { "Content-Type": "application/json" },
   });
   return response.json();
-}
-
-export async function renderComponent(
-  config: GridConfig | ChartConfig,
-  data: any
-): Promise<Buffer> {
-  const browser: Browser = await puppeteer.launch({
-    executablePath: process.env.CHROME_EXECUTABLE_PATH,
-    // headless: false,
-    // devtools: true,
-    // args:[
-    //     '--start-maximized'
-    // ]
-  });
-
-  const page: Page = await browser.newPage();
-
-  await page.evaluateOnNewDocument((accountToken: string) => {
-    // @ts-ignore - window is available in browser context
-    if (!window.wknw) {
-      // @ts-ignore
-      window.wknw = {
-        requestStartValues: function () {
-          // @ts-ignore
-          window.wknwweb.setStartValues({
-            accountToken,
-            accessToken: "testToken",
-          });
-        },
-        allComponentsLoaded: function () {
-          console.log("allComponentsLoaded");
-        },
-      };
-    }
-  }, process.env.WEKNOW_ACCOUNT_TOKEN as string);
-
-  const origin = `http://${process.env.WEKNOW_API_HOST || "localhost"}:${process.env.WEKNOW_API_PORT || "80"}`;
-  await page.goto(`${origin}/#/desktopstart`);
-  await page.goto(`${origin}/#/objectViewer`);
-  await page.evaluate(
-    (config: GridConfig | ChartConfig, data: any) => {
-      // @ts-ignore - window is available in browser context
-      window.wknwweb.setObjectContents(config);
-      // @ts-ignore
-      window.wknwweb.setObjectData(data);
-    },
-    config,
-    data
-  );
-
-  if (config.type === ObjectTypes.Table) {
-    await page.waitForSelector(".dx-datagrid, .component-load-error", {
-      visible: true,
-    });
-  } else if (config.type === ObjectTypes.Chart) {
-    await page.waitForSelector(".highcharts-container, .component-load-error", {
-      visible: true,
-    });
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-
-  const binaryScreenshot = await page.screenshot({
-    encoding: "binary",
-    type: "png",
-  });
-
-  await browser.close();
-
-  return binaryScreenshot as Buffer;
 }

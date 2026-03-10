@@ -11,9 +11,6 @@ export interface EnvironmentConfig {
   WEKNOW_ACCOUNT_TOKEN?: string;
   WEKNOW_PASSWORD_SALT?: string;
 
-  // Puppeteer
-  CHROME_EXECUTABLE_PATH?: string;
-
   // Metadata
   METADATA_ID?: string;
 
