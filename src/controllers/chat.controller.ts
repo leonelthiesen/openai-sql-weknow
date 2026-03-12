@@ -1,8 +1,10 @@
 import { type Request, type Response } from "express";
-import { OpenAIResponseSchema } from "../constants";
+import { MetadataField, OpenAIResponseSchema } from "../constants";
 import * as chatService from "../services/chat.service";
 import * as openAiService from "../services/open-ai.service";
-import type { MetadataField } from "../services/sql-create-statement.service";
+import * as weknowService from "../services/weknow.service";
+import { transformLLMToComponentExecuteInput } from "../utils/llm-to-weknow-component-execute";
+import type { LLMStructuredOutput } from "../models/llm-structured-output.models";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 
 interface FieldMetadata extends MetadataField {
@@ -135,6 +137,16 @@ function buildOpenAIInput(messages: chatService.Message[]): ResponseInputItem[] 
   return input;
 }
 
+function transformExecuteResult(data: any): chatService.ExecutionData {
+  let dimensions: string[] = [];
+  let source: (string | number | null)[][] = [];
+  if (data && data.cols && data.rows) {
+    dimensions = data.cols.map((col: any) => col.completeName);
+    source = data.rows.map((row: any) => row.cells.map((cell: any) => cell.value));
+  }
+  return { dimensions, source };
+}
+
 export const startConversation = async (req: Request<{}, {}, StartConversationBody>, res: Response) => {
   try {
     const { metadataId, userTextMessage, metadataFields } = req.body;
@@ -159,8 +171,27 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
     );
 
     const input = buildOpenAIInput(initialMessages);
-    const { structuredOutput, toolCallId, toolCallName, toolCallArguments } =
-      await openAiService.createModelResponse(input);
+    const { structuredOutput, toolCallId, toolCallName, toolCallArguments } = await openAiService.createModelResponse(input);
+
+    let executionData: chatService.ExecutionData | undefined;
+    let errorResponse: string | Object | undefined;
+    if (structuredOutput.action === "EXECUTE_QUERY") {
+      let executeInput = transformLLMToComponentExecuteInput(structuredOutput as LLMStructuredOutput, metadataId);
+      if (executeInput) {
+        try {
+          const accessToken = await weknowService.getAccessToken();
+          executeInput.accessToken = accessToken;
+          const executeResult = await weknowService.executeComponent(JSON.stringify(executeInput));
+          console.log("Resultado da execução no Weknow:", executeResult);
+          executionData = transformExecuteResult(executeResult);
+        } catch (error: any) {
+          errorResponse = error;
+          console.error("Erro ao executar componente no Weknow:", error);
+        }
+      }
+    }
+
+    console.log("Execution error: ", errorResponse);
 
     const newBotMessage = chatService.createMessage(newConversation.id, {
       role: "assistant",
@@ -170,6 +201,8 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
         name: toolCallName,
         arguments: toolCallArguments,
       },
+      executionData,
+      errorResponse,
     });
 
     return res.status(201).json({
@@ -227,6 +260,24 @@ export const addUserMessageToConversation = async (
     const { structuredOutput, toolCallId, toolCallName, toolCallArguments } =
       await openAiService.createModelResponse(input);
 
+    let executionData: chatService.ExecutionData | undefined;
+    let errorResponse: string | Object | undefined;
+    if (structuredOutput.action === "EXECUTE_QUERY") {
+      let executeInput = transformLLMToComponentExecuteInput(structuredOutput as LLMStructuredOutput, conversation.metadataId);
+      console.log("Execute input para Weknow:", JSON.stringify(executeInput, null, 2));
+      if (executeInput) {
+        try {
+          const accessToken = await weknowService.getAccessToken();
+          executeInput.accessToken = accessToken;
+          const executeResult = await weknowService.executeComponent(JSON.stringify(executeInput));
+          executionData = transformExecuteResult(executeResult);
+        } catch (error: any) {
+          errorResponse = error;
+          console.error("Erro ao executar componente no Weknow:", error);
+        }
+      }
+    }
+
     const newBotMessage = chatService.createMessage(parseInt(id), {
       role: "assistant",
       content: structuredOutput,
@@ -235,6 +286,8 @@ export const addUserMessageToConversation = async (
         name: toolCallName,
         arguments: toolCallArguments,
       },
+      executionData,
+      errorResponse
     });
 
     return res.status(201).json({ newUserMessage, newBotMessage });

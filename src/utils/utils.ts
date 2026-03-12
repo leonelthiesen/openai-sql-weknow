@@ -1,3 +1,6 @@
+import crypto from "crypto";
+
+
 export interface TreeViewField {
   isField: boolean;
   completeName: string;
@@ -24,4 +27,17 @@ export function convertTreeViewInList(treeView: TreeViewField[]): ListField[] {
     }
   });
   return tempFieldList;
+}
+
+export function encryptWithPublicKey (plainText: string, publicKeyPem: string) {
+    const buffer = Buffer.from(plainText, 'utf8');
+
+    const encrypted = crypto.publicEncrypt(
+        {
+            key: publicKeyPem,
+            padding: crypto.constants.RSA_PKCS1_PADDING
+        },
+        buffer
+    );
+    return encrypted.toString('base64');
 }

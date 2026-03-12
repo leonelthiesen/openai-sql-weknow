@@ -8,7 +8,7 @@
       "properties": {
         "message": {
           "type": "string",
-          "description": "Message contextualizing the response IN PORTUGUESE. Use Markdown. Insert '{{DATA_PLACEHOLDER}}' where the data should appear (in its own paragraph, only once). For renderType TEXT, insert it inline in a user-friendly way."
+          "description": "Message contextualizing the response IN PORTUGUESE. Use Markdown. The query result data will be rendered separately right after this message."
         },
         "userMessageSuggestions": {
           "type": "array",
@@ -119,13 +119,8 @@
               "$ref": "#/$defs/TPosWindowFunctionFilter"
             }
           },
-          "required": ["columns", "sort", "filters", "havingFilters", "posWindowFunctionFilters"],
+          "required": ["columns"],
           "additionalProperties": false
-        },
-        "chartConfig": {
-          "type": "object",
-          "description": "Apache ECharts version 6 configuration for visualizing the query result data. Required only when renderType is CHART. Must use 'dataset' option with 'dimensions' and 'source' (both empty, data inserted later). Use friendly titles/legends without field prefixes. Position legends below or beside the chart. Chart title must have padding (e.g., padding: [10, 0, 30, 0]).",
-          "additionalProperties": {}
         }
       },
       "required": ["message", "userMessageSuggestions", "renderType", "query"],
@@ -276,6 +271,24 @@
           }
         }
       }
+    },
+    "strict": false
+  },
+  {
+    "type": "function",
+    "name": "generate_chart_config",
+    "description": "Generate an Apache ECharts version 6 chart configuration to visualize the query result data. Must be called after execute_query when renderType is CHART. The fake query result data will be provided in the conversation so you can inspect column names and value ranges to build an appropriate chart.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "chartConfig": {
+          "type": "object",
+          "description": "Apache ECharts version 6 configuration object. Must use the 'dataset' option with 'dimensions' and 'source' (both empty — real data will be inserted later). Use friendly titles/legends without field prefixes (e.g., 'DATA_EMISSAO' → 'Data de Emissão'). Position legends below or beside the chart. Chart title must have padding so it does not stick to the chart (e.g., padding: [10, 0, 30, 0]). Axis titles should be centered and vertical where applicable.",
+          "additionalProperties": {}
+        }
+      },
+      "required": ["chartConfig"],
+      "additionalProperties": false
     },
     "strict": false
   },

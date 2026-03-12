@@ -7,11 +7,18 @@ export interface ToolCallInfo {
   arguments: string;
 }
 
+export interface ExecutionData {
+  dimensions: string[];
+  source: (string | number | null)[][];
+}
+
 export interface Message {
   id?: number;
   role: "developer" | "user" | "assistant";
   content: string | OpenAIResponseSchema;
   toolCall?: ToolCallInfo;
+  executionData?: ExecutionData;
+  errorResponse?: string | Object;
 }
 
 export interface Folder {
