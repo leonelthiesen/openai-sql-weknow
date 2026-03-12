@@ -4,13 +4,15 @@ import { MODEL_INSTRUCTIONS, type OpenAIResponseSchema } from "../constants";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import TOOL_DEFINITIONS from "../../data/llm-tool-definitions.json";
 
-const OpenAiModels = {
-  gpt4: "gpt-4",
-  gpt41Nano: "gpt-4.1-nano-2025-04-14",
-  gpt35Turbo: "gpt-3.5-turbo",
-  gpt5Nano: "gpt-5-nano-2025-08-07",
-  gpt5Mini: "gpt-5-mini-2025-08-07",
-} as const;
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const MODEL = "gpt-5-mini-2025-08-07";
+
+const SHARED_OPTIONS = {
+  model: MODEL,
+  reasoning: { effort: "minimal" as const },
+  include: ["reasoning.encrypted_content"] as OpenAI.Responses.ResponseIncludable[],
+};
 
 const CHART_TOOL_DEFINITION = TOOL_DEFINITIONS.find((t) => t.name === "generate_chart_config")!;
 const FIRST_CALL_TOOLS = TOOL_DEFINITIONS.filter((t) => t.name !== "generate_chart_config");
@@ -20,6 +22,7 @@ export interface ToolCallResult {
   toolCallId: string;
   toolCallName: string;
   toolCallArguments: string;
+  reasoningItems: OpenAI.Responses.ResponseOutputItem[];
 }
 
 /**
@@ -54,87 +57,103 @@ function generateFakeData(query: any): Record<string, unknown>[] {
   });
 }
 
+/**
+ * Builds function_call_output items for every function call in a response,
+ * supplying real data for the primary call and a stub for any extras.
+ */
+function buildFunctionCallOutputs(
+  calls: OpenAI.Responses.ResponseFunctionToolCall[],
+  primaryCallId: string,
+  primaryOutput: string
+): ResponseInputItem[] {
+  return calls.map((call) => ({
+    type: "function_call_output" as const,
+    call_id: call.call_id,
+    output: call.call_id === primaryCallId ? primaryOutput : "OK",
+  }));
+}
+
 export async function createModelResponse(
   input: ResponseInputItem[]
 ): Promise<ToolCallResult> {
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-
-  const sharedOptions = {
-    model: OpenAiModels.gpt5Mini,
-    reasoning: { effort: "minimal" as const },
-    include: ["reasoning.encrypted_content" as const],
-  };
-
   // ── First call: execute_query or ask_followup ────────────────────────────
   const firstResponse = await openai.responses.create({
-    ...sharedOptions,
+    ...SHARED_OPTIONS,
     instructions: MODEL_INSTRUCTIONS,
     input,
     tools: FIRST_CALL_TOOLS as OpenAI.Responses.Tool[],
     tool_choice: "required",
   });
 
-  const firstCall = firstResponse.output.find(
+  const firstCalls = firstResponse.output.filter(
     (item): item is OpenAI.Responses.ResponseFunctionToolCall =>
       item.type === "function_call"
   );
 
-  if (!firstCall) {
+  if (firstCalls.length === 0) {
     console.error("[openai] 1st call: no function_call in output", JSON.stringify(firstResponse.output, null, 2));
     throw new Error("Model did not return a function call.");
   }
 
-  const firstArgs = JSON.parse(firstCall.arguments);
-  console.log(`[openai] 1st call → ${firstCall.name}`, JSON.stringify(firstArgs, null, 2));
+  if (firstCalls.length > 1) {
+    console.warn(`[openai] 1st call: ${firstCalls.length} function calls returned, using first`);
+  }
+
+  const primaryCall = firstCalls[0]!;
+  const primaryArgs = JSON.parse(primaryCall.arguments);
+  console.log(`[openai] 1st call → ${primaryCall.name}`, JSON.stringify(primaryArgs, null, 2));
+
+  // Reasoning items must be passed back with tool call outputs on subsequent turns
+  const reasoningItems = firstResponse.output.filter(
+    (item): item is OpenAI.Responses.ResponseOutputItem => item.type === "reasoning"
+  );
 
   // ── ask_followup: nothing more to do ────────────────────────────────────
-  if (firstCall.name === "ask_followup") {
+  if (primaryCall.name === "ask_followup") {
     return {
       structuredOutput: {
         action: "FOLLOWUP_NEEDED",
-        message: firstArgs.message,
-        userMessageSuggestions: firstArgs.userMessageSuggestions,
+        message: primaryArgs.message,
+        userMessageSuggestions: primaryArgs.userMessageSuggestions,
       },
-      toolCallId: firstCall.call_id,
-      toolCallName: firstCall.name,
-      toolCallArguments: firstCall.arguments,
+      toolCallId: primaryCall.call_id,
+      toolCallName: primaryCall.name,
+      toolCallArguments: primaryCall.arguments,
+      reasoningItems,
     };
   }
 
-  // ── execute_query: generate fake data and feed back to LLM ──────────────
-  const fakeData = generateFakeData(firstArgs.query);
-
+  // ── execute_query: optionally call generate_chart_config ────────────────
+  const fakeData = generateFakeData(primaryArgs.query);
   let chartConfig: object | undefined;
 
-  if (firstArgs.renderType === "CHART") {
+  if (primaryArgs.renderType === "CHART") {
+    const functionCallOutputs = buildFunctionCallOutputs(
+      firstCalls,
+      primaryCall.call_id,
+      JSON.stringify({ columns: primaryArgs.query.columns ?? [], rows: fakeData })
+    );
+
     // ── Second call: generate_chart_config ──────────────────────────────
     const secondResponse = await openai.responses.create({
-      ...sharedOptions,
-      previous_response_id: firstResponse.id,
+      ...SHARED_OPTIONS,
+      instructions: MODEL_INSTRUCTIONS,
       input: [
-        {
-          type: "function_call_output",
-          call_id: firstCall.call_id,
-          output: JSON.stringify({
-            columns: firstArgs.query.columns ?? [],
-            rows: fakeData,
-          }),
-        } as ResponseInputItem,
+        ...input,
+        ...(firstResponse.output as unknown as ResponseInputItem[]),
+        ...functionCallOutputs,
       ],
       tools: [CHART_TOOL_DEFINITION] as OpenAI.Responses.Tool[],
       tool_choice: "required",
     });
 
-    const chartCall = secondResponse.output.find(
+    const chartCalls = secondResponse.output.filter(
       (item): item is OpenAI.Responses.ResponseFunctionToolCall =>
         item.type === "function_call"
     );
 
-    console.log("chartCall", chartCall)
-
-    if (chartCall) {
+    if (chartCalls.length > 0) {
+      const chartCall = chartCalls[0]!;
       chartConfig = JSON.parse(chartCall.arguments).chartConfig;
       console.log("[openai] 2nd call → generate_chart_config", JSON.stringify(chartCall, null, 2));
     } else {
@@ -142,19 +161,18 @@ export async function createModelResponse(
     }
   }
 
-  const structuredOutput: OpenAIResponseSchema = {
-    action: "EXECUTE_QUERY",
-    message: firstArgs.message,
-    userMessageSuggestions: firstArgs.userMessageSuggestions,
-    renderType: firstArgs.renderType,
-    query: firstArgs.query,
-    chartConfig,
-  };
-
   return {
-    structuredOutput,
-    toolCallId: firstCall.call_id,
-    toolCallName: firstCall.name,
-    toolCallArguments: firstCall.arguments,
+    structuredOutput: {
+      action: "EXECUTE_QUERY",
+      message: primaryArgs.message,
+      userMessageSuggestions: primaryArgs.userMessageSuggestions,
+      renderType: primaryArgs.renderType,
+      query: primaryArgs.query,
+      chartConfig,
+    },
+    toolCallId: primaryCall.call_id,
+    toolCallName: primaryCall.name,
+    toolCallArguments: primaryCall.arguments,
+    reasoningItems,
   };
 }

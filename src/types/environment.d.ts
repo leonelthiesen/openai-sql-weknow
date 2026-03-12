@@ -9,10 +9,6 @@ export interface EnvironmentConfig {
   WEKNOW_API_HOST?: string;
   WEKNOW_API_PORT?: string;
   WEKNOW_ACCOUNT_TOKEN?: string;
-  WEKNOW_PASSWORD_SALT?: string;
-
-  // Metadata
-  METADATA_ID?: string;
 
   // PostgreSQL (optional, for future use)
   PGHOST?: string;

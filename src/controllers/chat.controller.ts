@@ -112,6 +112,12 @@ function buildOpenAIInput(messages: chatService.Message[]): ResponseInputItem[] 
       } as ResponseInputItem);
     } else if (msg.role === "assistant") {
       if (msg.toolCall) {
+        // Reasoning models require reasoning items to be passed back before the function_call
+        if (msg.reasoningItems) {
+          for (const item of msg.reasoningItems) {
+            input.push(item as unknown as ResponseInputItem);
+          }
+        }
         // Replay the function call from the assistant
         input.push({
           type: "function_call",
@@ -171,7 +177,7 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
     );
 
     const input = buildOpenAIInput(initialMessages);
-    const { structuredOutput, toolCallId, toolCallName, toolCallArguments } = await openAiService.createModelResponse(input);
+    const { structuredOutput, toolCallId, toolCallName, toolCallArguments, reasoningItems } = await openAiService.createModelResponse(input);
 
     let executionData: chatService.ExecutionData | undefined;
     let errorResponse: string | Object | undefined;
@@ -201,6 +207,7 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
         name: toolCallName,
         arguments: toolCallArguments,
       },
+      reasoningItems,
       executionData,
       errorResponse,
     });
@@ -257,7 +264,7 @@ export const addUserMessageToConversation = async (
 
     console.log("Input para LLM:", JSON.stringify(input, null, 2));
 
-    const { structuredOutput, toolCallId, toolCallName, toolCallArguments } =
+    const { structuredOutput, toolCallId, toolCallName, toolCallArguments, reasoningItems } =
       await openAiService.createModelResponse(input);
 
     let executionData: chatService.ExecutionData | undefined;
@@ -286,6 +293,7 @@ export const addUserMessageToConversation = async (
         name: toolCallName,
         arguments: toolCallArguments,
       },
+      reasoningItems,
       executionData,
       errorResponse
     });

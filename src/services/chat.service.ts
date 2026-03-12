@@ -1,4 +1,5 @@
 import { MetadataField, MODEL_INSTRUCTIONS, OpenAIResponseSchema } from "../constants";
+import type { ResponseOutputItem } from "openai/resources/responses/responses";
 
 
 export interface ToolCallInfo {
@@ -17,6 +18,7 @@ export interface Message {
   role: "developer" | "user" | "assistant";
   content: string | OpenAIResponseSchema;
   toolCall?: ToolCallInfo;
+  reasoningItems?: ResponseOutputItem[];
   executionData?: ExecutionData;
   errorResponse?: string | Object;
 }

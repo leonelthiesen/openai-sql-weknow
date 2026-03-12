@@ -51,4 +51,4 @@ Express.js 5 + TypeScript API that converts natural language (Portuguese) into s
 
 ## Environment
 
-Copy `.env.sample` to `.env`. Required: `OPENAI_API_KEY`. Optional: `PORT`, `WEKNOW_*` credentials, `METADATA_ID`, PostgreSQL connection details.
+Copy `.env.sample` to `.env`. Required: `OPENAI_API_KEY`. Optional: `PORT`, `WEKNOW_*` credentials, PostgreSQL connection details.
