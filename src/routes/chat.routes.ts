@@ -10,7 +10,6 @@ router.post("/startConversation", chatController.startConversation);
 
 router.get("/conversations/:id/messages", chatController.getMessagesByConversationId);
 router.post("/conversations/:id/userMessage", chatController.addUserMessageToConversation);
-router.put("/conversations/:conversationId/messages/:messageId", chatController.updateMessage);
 router.put("/conversations/:id/folder", chatController.moveConversationToFolder);
 
 router.get("/folders", chatController.getAllFolders);

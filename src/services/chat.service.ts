@@ -1,26 +1,44 @@
 import { MetadataField, MODEL_INSTRUCTIONS, OpenAIResponseSchema } from "../constants";
 import type { ResponseOutputItem } from "openai/resources/responses/responses";
 
-
-export interface ToolCallInfo {
-  id: string;
-  name: string;
-  arguments: string;
-}
-
 export interface ExecutionData {
   dimensions: string[];
   source: (string | number | null)[][];
 }
 
-export interface Message {
-  id?: number;
-  role: "developer" | "user" | "assistant";
-  content: string | OpenAIResponseSchema;
-  toolCall?: ToolCallInfo;
-  reasoningItems?: ResponseOutputItem[];
+export interface OpenAiItem {
+  type: "message" | "reasoning" | "function_call" | "function_call_output";
+
+  // Para type "message"
+  role?: "developer" | "user" | "assistant";
+  content?: string;
+
+  // Para type "reasoning"
+  reasoningItem?: ResponseOutputItem;
+
+  // Para type "function_call"
+  callId?: string;
+  name?: string;
+  arguments?: string;
+
+  // Para type "function_call_output"
+  output?: string;
+}
+
+export interface AppMessage {
+  id: number;
+  role: "user" | "assistant";
+
+  // Dados para exibição no frontend
+  content?: string;
+  parsedContent?: OpenAIResponseSchema;
   executionData?: ExecutionData;
   errorResponse?: string | Object;
+
+  // Mensagens internas trocadas com a OpenAI
+  openAiItems: OpenAiItem[];
+
+  createdAt: Date;
 }
 
 export interface Folder {
@@ -35,7 +53,7 @@ export interface Conversation {
   name: string;
   systemMessage: string;
   metadataFields: MetadataField[];
-  messages?: Message[];
+  messages?: AppMessage[];
   folderId?: number | null;
   createdAt: Date;
   updatedAt: Date;
@@ -58,7 +76,6 @@ export function getConversation(id: number): Conversation | undefined {
 export function createConversation(
   metadataId: number,
   metadataFields: MetadataField[],
-  messages: Message[] = [],
   folderId?: number | null
 ): Conversation {
   const now = new Date();
@@ -73,23 +90,17 @@ export function createConversation(
     updatedAt: now,
   };
   conversations.push(newConversation);
-
-  if (messages.length > 0) {
-    messages.forEach((msg) => {
-      createMessage(newConversation.id, msg);
-    });
-  }
-
   return newConversation;
 }
 
-export function addMessage(conversationId: number, message: Message): void {
+export function addAppMessage(conversationId: number, appMessage: AppMessage): void {
   const conversation = conversations.find((c) => c.id === conversationId);
   if (conversation) {
     if (!conversation.messages) {
       conversation.messages = [];
     }
-    conversation.messages.push(message);
+    conversation.messages.push(appMessage);
+    conversation.updatedAt = new Date();
   }
 }
 
@@ -97,42 +108,22 @@ export function getConversationById(id: number): Conversation | undefined {
   return conversations.find((c) => c.id === id);
 }
 
-export function getMessagesByConversationId(conversationId: number): Message[] {
+export function getMessagesByConversationId(conversationId: number): AppMessage[] {
   const conversation = conversations.find((c) => c.id === conversationId);
   return conversation?.messages || [];
 }
 
-export function createMessage(conversationId: number, message: Message) {
-  message.id = Date.now();
-  addMessage(conversationId, message);
-
-  const conversation = conversations.find((c) => c.id === conversationId);
-  if (conversation) {
-    conversation.updatedAt = new Date();
-  }
-
-  return { ...message };
-}
-
-export function updateMessage(
+export function createAppMessage(
   conversationId: number,
-  messageId: number,
-  content: string | OpenAIResponseSchema
-): Message | undefined {
-  const conversation = conversations.find((c) => c.id === conversationId);
-  if (!conversation || !conversation.messages) {
-    return undefined;
-  }
-
-  const message = conversation.messages.find((m) => m.id === messageId);
-  if (!message) {
-    return undefined;
-  }
-
-  message.content = content;
-  conversation.updatedAt = new Date();
-
-  return { ...message };
+  appMessage: Omit<AppMessage, "id" | "createdAt">
+): AppMessage {
+  const newMessage: AppMessage = {
+    ...appMessage,
+    id: Date.now(),
+    createdAt: new Date(),
+  };
+  addAppMessage(conversationId, newMessage);
+  return newMessage;
 }
 
 export interface FolderWithCount extends Folder {
@@ -176,10 +167,8 @@ export function deleteFolder(id: number, deleteConversations: boolean = false): 
   }
 
   if (deleteConversations) {
-    // Delete all conversations in this folder
     conversations = conversations.filter((c) => c.folderId !== id);
   } else {
-    // Move conversations to no folder (null)
     conversations.forEach((c) => {
       if (c.folderId === id) {
         c.folderId = null;
@@ -207,15 +196,14 @@ function extractSearchableText(conversation: Conversation): string {
   ];
 
   if (conversation.messages) {
-    conversation.messages.forEach((message) => {
-      if (typeof message.content === "string") {
-        parts.push(message.content);
-      } else {
-        const schema = message.content as OpenAIResponseSchema;
-        parts.push(schema.message || "");
-        // parts.push(schema.query || "");
-        if (schema.userMessageSuggestions) {
-          parts.push(...schema.userMessageSuggestions);
+    conversation.messages.forEach((appMessage) => {
+      if (appMessage.content) {
+        parts.push(appMessage.content);
+      }
+      if (appMessage.parsedContent) {
+        parts.push(appMessage.parsedContent.message || "");
+        if (appMessage.parsedContent.userMessageSuggestions) {
+          parts.push(...appMessage.parsedContent.userMessageSuggestions);
         }
       }
     });
@@ -237,17 +225,14 @@ export function searchConversations(
   const normalizedQuery = normalizeDiacritics(query.trim());
 
   let filtered = conversations.filter((conversation) => {
-    // Filter by folder if specified
     if (folderId !== undefined && conversation.folderId !== folderId) {
       return false;
     }
 
-    // Search in all fields
     const searchableText = normalizeDiacritics(extractSearchableText(conversation));
     return searchableText.includes(normalizedQuery);
   });
 
-  // Sort by newest first
   return filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 

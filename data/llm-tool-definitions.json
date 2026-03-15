@@ -277,7 +277,7 @@
   {
     "type": "function",
     "name": "generate_chart_config",
-    "description": "Generate an Apache ECharts version 6 chart configuration to visualize the query result data. Must be called after execute_query when renderType is CHART. The fake query result data will be provided in the conversation so you can inspect column names and value ranges to build an appropriate chart.",
+    "description": "Generate an Apache ECharts version 6 chart configuration to visualize the query result data. The fake query result data will be provided in the conversation so you can inspect column names and value ranges to build an appropriate chart.",
     "parameters": {
       "type": "object",
       "properties": {

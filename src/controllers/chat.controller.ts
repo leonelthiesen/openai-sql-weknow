@@ -1,10 +1,7 @@
 import { type Request, type Response } from "express";
-import { MetadataField, OpenAIResponseSchema } from "../constants";
+import { MetadataField } from "../constants";
 import * as chatService from "../services/chat.service";
 import * as openAiService from "../services/open-ai.service";
-import * as weknowService from "../services/weknow.service";
-import { transformLLMToComponentExecuteInput } from "../utils/llm-to-weknow-component-execute";
-import type { LLMStructuredOutput } from "../models/llm-structured-output.models";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 
 interface FieldMetadata extends MetadataField {
@@ -27,46 +24,15 @@ interface AddMessageBody {
   userTextMessage: string;
 }
 
-/**
- * Builds enriched field descriptions for the LLM prompt including titles, sample data, and enum options.
- * @param metadataFields - Array of field metadata objects
- * @returns Formatted field descriptions with sample data
- */
-// const buildFieldDescriptions = (metadataFields: FieldMetadata[]): string => {
-//   return metadataFields
-//     .map((field) => {
-//       let description = `${field.completeName}`;
+type NonReasoningOpenAiItem = chatService.OpenAiItem & {
+  type: "message" | "function_call" | "function_call_output";
+};
 
-//       // Add human-readable title if available
-//       if (field.title) {
-//         description += ` (${field.title})`;
-//       }
-
-//       // Prioritize formatOptions.options for enum fields (more complete)
-//       if (field.formatOptions?.options && field.formatOptions.options.length > 0) {
-//         const maxOptions = 5;
-//         const optionSamples = field.formatOptions.options
-//           .slice(0, maxOptions)
-//           .map((opt) => `"${opt.value}"="${opt.text}"`)
-//           .join(", ");
-//         const moreText = field.formatOptions.options.length > maxOptions ? ", ..." : "";
-//         description += ` [Options: ${optionSamples}${moreText}]`;
-//       }
-//       // Otherwise, use custom sampleData if provided
-//       else if (field.sampleData && Array.isArray(field.sampleData) && field.sampleData.length > 0) {
-//         const maxSamples = 5;
-//         const samples = field.sampleData
-//           .slice(0, maxSamples)
-//           .map((val) => (typeof val === "string" ? `"${val}"` : val))
-//           .join(", ");
-//         const moreText = field.sampleData.length > maxSamples ? ", ..." : "";
-//         description += ` [Examples: ${samples}${moreText}]`;
-//       }
-
-//       return description;
-//     })
-//     .join("\n");
-// };
+function isNonReasoningOpenAiItem(
+  item: chatService.OpenAiItem
+): item is NonReasoningOpenAiItem {
+  return item.type !== "reasoning";
+}
 
 /**
  * Builds enriched field descriptions for the LLM prompt including titles, sample data, and enum options.
@@ -98,59 +64,36 @@ const buildFieldsJsonString = (metadataFields: FieldMetadata[]): string => {
 
 
 /**
- * Converts stored conversation messages into the proper OpenAI Responses API input format,
- * including function_call and function_call_output items for tool call history.
+ * Converts stored AppMessages into the proper OpenAI Responses API input format.
+ * Iterates over all AppMessages and flatMaps their openAiItems into ResponseInputItems.
  */
-function buildOpenAIInput(messages: chatService.Message[]): ResponseInputItem[] {
-  const input: ResponseInputItem[] = [];
-
-  for (const msg of messages) {
-    if (msg.role === "user" || msg.role === "developer") {
-      input.push({
-        role: msg.role === "developer" ? "developer" : "user",
-        content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
-      } as ResponseInputItem);
-    } else if (msg.role === "assistant") {
-      if (msg.toolCall) {
-        // Reasoning models require reasoning items to be passed back before the function_call
-        if (msg.reasoningItems) {
-          for (const item of msg.reasoningItems) {
-            input.push(item as unknown as ResponseInputItem);
-          }
+function buildOpenAIInput(messages: chatService.AppMessage[]): ResponseInputItem[] {
+  return messages.flatMap((appMessage) =>
+    appMessage.openAiItems
+      .filter(isNonReasoningOpenAiItem)
+      .map((item) => {
+        switch (item.type) {
+          case "message":
+            return {
+              role: item.role,
+              content: item.content,
+            } as ResponseInputItem;
+          case "function_call":
+            return {
+              type: "function_call",
+              call_id: item.callId,
+              name: item.name,
+              arguments: item.arguments,
+            } as ResponseInputItem;
+          case "function_call_output":
+            return {
+              type: "function_call_output",
+              call_id: item.callId,
+              output: item.output,
+            } as ResponseInputItem;
         }
-        // Replay the function call from the assistant
-        input.push({
-          type: "function_call",
-          call_id: msg.toolCall.id,
-          name: msg.toolCall.name,
-          arguments: msg.toolCall.arguments,
-        } as ResponseInputItem);
-        // Provide a confirmation output (data is NOT returned to the LLM)
-        input.push({
-          type: "function_call_output",
-          call_id: msg.toolCall.id,
-          output: msg.toolCall.name === "execute_query"
-            ? "Query executed successfully. Results rendered to the user."
-            : "Message delivered to the user.",
-        } as ResponseInputItem);
-      } else {
-        const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
-        input.push({ role: "assistant", content } as ResponseInputItem);
-      }
-    }
-  }
-
-  return input;
-}
-
-function transformExecuteResult(data: any): chatService.ExecutionData {
-  let dimensions: string[] = [];
-  let source: (string | number | null)[][] = [];
-  if (data && data.cols && data.rows) {
-    dimensions = data.cols.map((col: any) => col.completeName);
-    source = data.rows.map((row: any) => row.cells.map((cell: any) => cell.value));
-  }
-  return { dimensions, source };
+      })
+  );
 }
 
 export const startConversation = async (req: Request<{}, {}, StartConversationBody>, res: Response) => {
@@ -159,63 +102,46 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
 
     const fieldDescriptions = buildFieldsJsonString(metadataFields);
 
-    const initialMessages: chatService.Message[] = [
-      {
-        role: "developer",
-        content: `Os campos disponíveis para considerar na tabela virtual são: \n${fieldDescriptions}`,
-      },
-      {
-        role: "user",
-        content: userTextMessage,
-      },
-    ];
-
     const newConversation = chatService.createConversation(
       metadataId,
-      metadataFields,
-      initialMessages
+      metadataFields
     );
 
-    const input = buildOpenAIInput(initialMessages);
-    const { structuredOutput, toolCallId, toolCallName, toolCallArguments, reasoningItems } = await openAiService.createModelResponse(input);
+    // Create user AppMessage with developer + user openAiItems
+    const userAppMessage = chatService.createAppMessage(newConversation.id, {
+      role: "user",
+      content: userTextMessage,
+      openAiItems: [
+        {
+          type: "message",
+          role: "developer",
+          content: `Available fields of "VIRTUAL_DATA_TABLE" to use in query: \n${fieldDescriptions}`,
+        },
+        {
+          type: "message",
+          role: "user",
+          content: userTextMessage,
+        },
+      ],
+    });
 
-    let executionData: chatService.ExecutionData | undefined;
-    let errorResponse: string | Object | undefined;
-    if (structuredOutput.action === "EXECUTE_QUERY") {
-      let executeInput = transformLLMToComponentExecuteInput(structuredOutput as LLMStructuredOutput, metadataId);
-      if (executeInput) {
-        try {
-          const accessToken = await weknowService.getAccessToken();
-          executeInput.accessToken = accessToken;
-          const executeResult = await weknowService.executeComponent(JSON.stringify(executeInput));
-          console.log("Resultado da execução no Weknow:", executeResult);
-          executionData = transformExecuteResult(executeResult);
-        } catch (error: any) {
-          errorResponse = error;
-          console.error("Erro ao executar componente no Weknow:", error);
-        }
-      }
-    }
+    const allMessages = chatService.getMessagesByConversationId(newConversation.id);
+    const input = buildOpenAIInput(allMessages);
+    const { structuredOutput, openAiItems, executionData, errorResponse } =
+      await openAiService.createModelResponse(input, metadataId);
 
-    console.log("Execution error: ", errorResponse);
-
-    const newBotMessage = chatService.createMessage(newConversation.id, {
+    // Create assistant AppMessage with all openAiItems from the response
+    const assistantAppMessage = chatService.createAppMessage(newConversation.id, {
       role: "assistant",
-      content: structuredOutput,
-      toolCall: {
-        id: toolCallId,
-        name: toolCallName,
-        arguments: toolCallArguments,
-      },
-      reasoningItems,
+      parsedContent: structuredOutput,
       executionData,
       errorResponse,
+      openAiItems,
     });
 
     return res.status(201).json({
       newConversation,
-      newUserMessage: initialMessages[1],
-      newBotMessage,
+      newMessages: [userAppMessage, assistantAppMessage],
     });
   } catch (error: any) {
     return res.status(500).json({ message: "Erro ao iniciar conversa.", error: error.message });
@@ -254,51 +180,39 @@ export const addUserMessageToConversation = async (
       throw new Error("Conversa não encontrada.");
     }
 
-    const newUserMessage = chatService.createMessage(parseInt(id), {
+    const conversationId = parseInt(id);
+
+    // Create user AppMessage with single user openAiItem
+    const userAppMessage = chatService.createAppMessage(conversationId, {
       role: "user",
       content: userTextMessage,
+      openAiItems: [
+        {
+          type: "message",
+          role: "user",
+          content: userTextMessage,
+        },
+      ],
     });
 
-    const messages = chatService.getMessagesByConversationId(parseInt(id));
-    const input = buildOpenAIInput(messages);
+    const allMessages = chatService.getMessagesByConversationId(conversationId);
+    const input = buildOpenAIInput(allMessages);
 
     console.log("Input para LLM:", JSON.stringify(input, null, 2));
 
-    const { structuredOutput, toolCallId, toolCallName, toolCallArguments, reasoningItems } =
-      await openAiService.createModelResponse(input);
+    const { structuredOutput, openAiItems, executionData, errorResponse } =
+      await openAiService.createModelResponse(input, conversation.metadataId);
 
-    let executionData: chatService.ExecutionData | undefined;
-    let errorResponse: string | Object | undefined;
-    if (structuredOutput.action === "EXECUTE_QUERY") {
-      let executeInput = transformLLMToComponentExecuteInput(structuredOutput as LLMStructuredOutput, conversation.metadataId);
-      console.log("Execute input para Weknow:", JSON.stringify(executeInput, null, 2));
-      if (executeInput) {
-        try {
-          const accessToken = await weknowService.getAccessToken();
-          executeInput.accessToken = accessToken;
-          const executeResult = await weknowService.executeComponent(JSON.stringify(executeInput));
-          executionData = transformExecuteResult(executeResult);
-        } catch (error: any) {
-          errorResponse = error;
-          console.error("Erro ao executar componente no Weknow:", error);
-        }
-      }
-    }
-
-    const newBotMessage = chatService.createMessage(parseInt(id), {
+    // Create assistant AppMessage with all openAiItems from the response
+    const assistantAppMessage = chatService.createAppMessage(conversationId, {
       role: "assistant",
-      content: structuredOutput,
-      toolCall: {
-        id: toolCallId,
-        name: toolCallName,
-        arguments: toolCallArguments,
-      },
-      reasoningItems,
+      parsedContent: structuredOutput,
       executionData,
-      errorResponse
+      errorResponse,
+      openAiItems,
     });
 
-    return res.status(201).json({ newUserMessage, newBotMessage });
+    return res.status(201).json({ newMessages: [userAppMessage, assistantAppMessage] });
   } catch (error: any) {
     return res
       .status(500)
@@ -408,32 +322,3 @@ export const searchConversations = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Erro ao buscar conversas.", error: error.message });
   }
 };
-
-export const updateMessage = async (
-  req: Request<{ conversationId: string; messageId: string }, {}, { content: string | OpenAIResponseSchema }>,
-  res: Response
-) => {
-  try {
-    const { conversationId, messageId } = req.params;
-    const { content } = req.body;
-
-    if (!content) {
-      return res.status(400).json({ message: "Conteúdo da mensagem é obrigatório." });
-    }
-
-    const updatedMessage = chatService.updateMessage(
-      parseInt(conversationId),
-      parseInt(messageId),
-      content
-    );
-
-    if (!updatedMessage) {
-      return res.status(404).json({ message: "Conversa ou mensagem não encontrada." });
-    }
-
-    return res.json(updatedMessage);
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao atualizar mensagem.", error: error.message });
-  }
-};
-

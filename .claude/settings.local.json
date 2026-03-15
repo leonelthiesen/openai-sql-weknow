@@ -12,7 +12,8 @@
       "Bash(cd \"C:\\\\Users\\\\Leonel Thiesen\\\\Documents\\\\ProjetosGit\\\\openai-sql-weknow\" && npm test -- src/services/weknow.service.test.ts 2>&1 | grep -A 30 \"FAIL\\\\|Error\\\\|failed\\\\|AssertionError\")",
       "Bash(cd \"C:\\\\Users\\\\Leonel Thiesen\\\\Documents\\\\ProjetosGit\\\\openai-sql-weknow\" && npm test -- src/services/weknow.service.test.ts 2>&1 | grep -E \"stdout|status|Set-Cookie|Cookie|FAIL|✓|×\" | head -30)",
       "Bash(cd \"C:\\\\Users\\\\Leonel Thiesen\\\\Documents\\\\ProjetosGit\\\\openai-sql-weknow\" && npm test -- src/services/weknow.service.test.ts 2>&1 | grep -E \"✓|×|passed|failed|skipped\")",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(cd \"/c/Users/Leonel Thiesen/Documents/ProjetosGit/openai-sql-weknow\" && npm test 2>&1)"
     ]
   }
 }
