@@ -13,7 +13,6 @@ Layered MVC pattern: **Routes → Controllers → Services**
 - `src/services/` — Business logic (chat orchestration, OpenAI integration, WeKnow API)
 - `src/types/` — TypeScript type declarations
 - `src/utils/` — Shared utilities
-- `data/` — LLM tool definitions and test fixtures (JSON)
 
 Key services:
 - **chat.service** — Conversation/folder management (in-memory), message reconstruction for multi-turn conversations
@@ -43,9 +42,9 @@ npm run test             # Run Vitest
 
 ## Conventions
 
-- **OpenAI tool calling**: Tools defined in `data/llm-tool-definitions.json`. Two tools: `execute_query` (generates SQL structure with render type CHART/TABLE/TEXT) and `ask_followup` (request clarification)
+- **OpenAI tool calling**: Tools defined in `src/models/tool-definitions.ts`. Three tools: `execute_query` (generates SQL structure with render type CHART/TABLE/TEXT), `ask_followup` (request clarification), and `render_chart_config` (generate ECharts v6 JSON config)1
 - **Message reconstruction**: Tool calls stored with IDs, reconstructed as `function_call` + `function_call_output` items for conversation context
-- **Chart rendering**: Apache ECharts v6 JSON config (dataset left empty, populated later)
+- **Chart rendering**: Apache ECharts v6 JSON config
 - **Search**: Diacritic-normalized for Portuguese characters
 - **Environment**: Copy `sample.env` to `.env` — requires `OPENAI_API_KEY` and WeKnow credentials
 - **Database**: PostgreSQL via `postgres` driver (configured but not yet actively used for persistence)

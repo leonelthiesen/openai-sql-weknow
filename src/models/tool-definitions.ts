@@ -2,36 +2,56 @@ import type OpenAI from "openai";
 
 type FunctionTool = OpenAI.Responses.FunctionTool;
 
+function description(...lines: string[]): string {
+  return lines.join(" ");
+}
+
 export function getExecuteQueryToolDefinition(): FunctionTool {
   return {
     type: "function",
     name: "execute_query",
-    description:
-      "Execute a data query when enough information is available from the user. The query will be executed by the system and results rendered to the user. Always call this tool when you have sufficient information to build the query.",
+    description: description(
+      "Execute a data query when enough information is available from the user.",
+      "The query will be executed by the system and results rendered to the user.",
+      "Always call this tool when you have sufficient information to build the query.",
+      "When a limit or top is requested, you must create and use a calculated field with a window function and a filter of type 'posWindowFunctionFilters'."
+    ),
     parameters: {
       type: "object",
       properties: {
         message: {
           type: "string",
-          description:
-            "Message contextualizing the response IN PORTUGUESE. Use Markdown. The query result data will be rendered separately right after this message.",
+          description: description(
+            "Message contextualizing the response IN PORTUGUESE.",
+            "Use Markdown.",
+            "The query result data will be rendered separately right after this message.",
+          ),
         },
         userMessageSuggestions: {
           type: "array",
-          description:
-            "List of suggestions for follow-up prompts, next actions, or analyses IN PORTUGUESE.",
+          description: description(
+            "List of suggestions for follow-up prompts, next actions,",
+            "or analyses IN PORTUGUESE.",
+          ),
           items: { type: "string" },
         },
         renderType: {
           type: "string",
-          description:
-            "Determines how the query result data should be rendered. Use CHART for graphical visualizations, TABLE for tabular data display, or TEXT when the answer can be conveyed as a simple text message (e.g., a single value or summary).",
+          description: description(
+            "Determines how the query result data should be rendered.",
+            "Use CHART for graphical visualizations, TABLE for tabular data display,",
+            "or TEXT when the answer can be conveyed as a simple text message (e.g., a single value or summary).",
+            "Consider user requests."
+          ),
           enum: ["CHART", "TABLE", "TEXT"],
         },
         query: {
           type: "object",
-          description:
+          description: description(
             "Query definitions: columns, sorting, calculated fields, filters, and post-aggregation (having) filters.",
+            "This query will not be shown to the user.",
+            "The query result data/visualization will be shown to the user separately right after your message."
+          ),
           properties: {
             columns: {
               type: "array",
@@ -41,8 +61,9 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
                 properties: {
                   completeName: {
                     type: "string",
-                    description:
+                    description: description(
                       "Use the 'completeName' from the provided fields or calculated fields.",
+                    ),
                   },
                   measureFunction: { $ref: "#/$defs/TMeasureFunction" },
                   title: {
@@ -62,8 +83,9 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
                 properties: {
                   completeName: {
                     type: "string",
-                    description:
+                    description: description(
                       "Use the 'completeName' from the provided fields or calculated fields.",
+                    ),
                   },
                   direction: {
                     type: "number",
@@ -87,31 +109,47 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
             },
             calculatedFields: {
               type: "array",
-              description:
-                "List of calculated fields (ANSI SQL expressions) that can be used in columns, sorting, filters, and post-aggregation (having) filters, where they must be referenced by the calculated field's 'completeName'.",
+              description: description(
+                "List of calculated fields (ANSI SQL expressions) that can be defined and used in",
+                "columns, sorting, filters, and post-aggregation (having) filters,",
+                "where they must be referenced by the calculated field's 'completeName'.",
+                "This can be used when direct fields from the virtual table is not sufficient.",
+                "When a calculated field with 'hasAggregateFunction' equal to true is referenced, the 'measureFunction' property of the reference must always be set to 0 (fnNone)."
+              ),
               items: {
                 type: "object",
                 properties: {
                   completeName: {
                     type: "string",
-                    description:
-                      "Create a unique name always starting with 'cf_' and using only lowercase letters and '_'.",
+                    description: description(
+                      "Create a unique name always starting with 'cf_' and using only",
+                      "lowercase letters and '_'.",
+                    ),
                   },
                   dataType: { $ref: "#/$defs/TCalculatedFieldType" },
                   formula: {
                     type: "string",
-                    description:
-                      "ANSI SQL expression that can contain aggregation functions (SUM, COUNT, AVG, etc.) and analytic functions (RANK, ROW_NUMBER, etc.). Provided fields can be referenced by the 'completeName' between '%', for example: '%$completeName%'.",
+                    description: description(
+                      "ANSI SQL expression that can contain aggregation functions",
+                      "(SUM, COUNT, AVG, etc.) and analytic functions",
+                      "(RANK, ROW_NUMBER, etc.). Provided fields can be referenced",
+                      "by the 'completeName' between '%', for example:",
+                      "'%$completeName%'.",
+                    ),
                   },
                   hasAggregateFunction: {
                     type: "boolean",
-                    description:
-                      "True if the formula contains an aggregation function (SUM, COUNT, AVG, etc.)",
+                    description: description(
+                      "True if the formula contains an aggregation function",
+                      "(SUM, COUNT, AVG, etc.)",
+                    ),
                   },
                   hasAnalyticFunction: {
                     type: "boolean",
-                    description:
-                      "True if the formula contains a window function such as RANK, ROW_NUMBER, etc.",
+                    description: description(
+                      "True if the formula contains a window function such as",
+                      "RANK, ROW_NUMBER, etc.",
+                    ),
                   },
                   title: {
                     type: "string",
@@ -136,8 +174,10 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
       $defs: {
         TMeasureFunction: {
           type: "number",
-          description:
-            "Enum for measures and aggregation functions; use fnNone when referencing a calculated field with aggregation.",
+          description: description(
+            "Enum for measures and aggregation functions; use fnNone when",
+            "referencing a calculated field with aggregation.",
+          ),
           enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
           oneOf: [
             { const: 0, title: "fnNone", description: "No aggregation function" },
@@ -196,13 +236,17 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
         },
         TWhereFilters: {
           type: "object",
-          description:
-            "Definitions for WHERE filters, which can be nested recursively to represent complex conditions.",
+          description: description(
+            "Definitions for WHERE filters, which can be nested recursively",
+            "to represent complex conditions.",
+          ),
           properties: {
             completeName: {
               type: "string",
-              description:
-                "Use the 'completeName' from the provided fields or calculated fields.",
+              description: description(
+                "Use the 'completeName' from the provided fields or",
+                "calculated fields.",
+              ),
             },
             filters: {
               type: "array",
@@ -212,8 +256,9 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
             join: { $ref: "#/$defs/TBooleanOperator" },
             not: {
               type: "boolean",
-              description:
+              description: description(
                 "Indicates whether the filter condition should be negated",
+              ),
             },
             operator: { $ref: "#/$defs/TComparisonOperator" },
             values: { $ref: "#/$defs/TValues" },
@@ -230,13 +275,17 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
         },
         THavingFilters: {
           type: "object",
-          description:
-            "Definitions for HAVING filters, which can be nested recursively to represent complex post-aggregation conditions.",
+          description: description(
+            "Definitions for HAVING filters, which can be nested recursively",
+            "to represent complex post-aggregation conditions.",
+          ),
           properties: {
             completeName: {
               type: "string",
-              description:
-                "Use the 'completeName' from the provided fields or calculated fields.",
+              description: description(
+                "Use the 'completeName' from the provided fields or",
+                "calculated fields.",
+              ),
             },
             filters: {
               type: "array",
@@ -247,8 +296,9 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
             measureFunction: { $ref: "#/$defs/TMeasureFunction" },
             not: {
               type: "boolean",
-              description:
+              description: description(
                 "Indicates whether the filter condition should be negated",
+              ),
             },
             operator: { $ref: "#/$defs/TComparisonOperator" },
             values: { $ref: "#/$defs/TValues" },
@@ -266,13 +316,16 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
         },
         TPosWindowFunctionFilter: {
           type: "object",
-          description:
+          description: description(
             "Definitions for filters that use window functions.",
+          ),
           properties: {
             completeName: {
               type: "string",
-              description:
-                "Use the 'completeName' from the provided fields or calculated fields.",
+              description: description(
+                "Use the 'completeName' from the provided fields or",
+                "calculated fields.",
+              ),
             },
             filters: {
               type: "array",
@@ -283,8 +336,9 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
             measureFunction: { $ref: "#/$defs/TMeasureFunction" },
             not: {
               type: "boolean",
-              description:
+              description: description(
                 "Indicates whether the filter condition should be negated",
+              ),
             },
             operator: { $ref: "#/$defs/TComparisonOperator" },
             values: { $ref: "#/$defs/TValues" },
@@ -321,16 +375,62 @@ export function getRenderChartToolDefinition(): FunctionTool {
   return {
     type: "function",
     name: "render_chart_config",
-    description:
-      "Render an Apache ECharts version 6 chart configuration to visualize the query result data. The fake query result data will be provided in the conversation so you can inspect column names and value ranges to build an appropriate chart.",
+    description: description(
+      "Render an Apache ECharts version 6 chart configuration to visualize the query result data.",
+      "The query result data will be provided in the conversation so you can inspect column names and value ranges to build an appropriate chart.",
+    ),
     parameters: {
       type: "object",
       properties: {
         chartConfig: {
           type: "object",
-          description:
-            "Apache ECharts version 6 configuration object. Must use the 'dataset' option with 'dimensions' and 'source'. Use friendly titles/legends without field prefixes (e.g., 'DATA_EMISSAO' → 'Data de Emissão'). Position legends below or beside the chart. Chart title must have padding so it does not stick to the chart (e.g., padding: [10, 0, 30, 0]). Axis titles should be centered and vertical where applicable.",
-          additionalProperties: {},
+          description: description(
+            "Apache ECharts version 6 configuration object.",
+            "Must use the 'dataset' option with 'dimensions' and 'source'.",
+            "Use friendly Portuguese titles/legends (e.g., 'DATA_EMISSAO' → 'Data de Emissão').",
+            "Position legends below or beside the chart.",
+            "Chart title must have padding so it does not stick to the chart (e.g., padding: [10, 0, 30, 0]).",
+            "Axis titles should be centered and vertical where applicable.",
+          ),
+          properties: {
+            title: {
+              type: "object",
+              additionalProperties: true
+            },
+            dataset: {
+              type: "object",
+              additionalProperties: true
+            },
+            xAxis: {
+              type: "object",
+              additionalProperties: true
+            },
+            yAxis: {
+              type: "object",
+              additionalProperties: true
+            },
+            series: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: true
+              }
+            },
+            legend: {
+              type: "object",
+              additionalProperties: true
+            },
+            tooltip: {
+              type: "object",
+              additionalProperties: true
+            },
+            grid: {
+              type: "object",
+              additionalProperties: true
+            },
+          },
+          required: ["dataset", "series"],
+          additionalProperties: true,
         },
       },
       required: ["chartConfig"],
@@ -344,20 +444,30 @@ export function getAskFollowupToolDefinition(): FunctionTool {
   return {
     type: "function",
     name: "ask_followup",
-    description:
-      "Ask the user for clarification or additional information when the request is ambiguous or missing required details (e.g., date range, specific fields, filters). Call this instead of guessing.",
+    description: description(
+      "Ask the user for clarification or additional information when the",
+      "request is ambiguous or missing required details",
+      "(e.g., date range, specific fields, filters).",
+      "If you notice a required filter was not provided, use this tool to ask the user for clarification.",
+      "Call this instead of guessing.",
+    ),
     parameters: {
       type: "object",
       properties: {
         message: {
           type: "string",
-          description:
-            "Message explaining what information is missing and suggesting examples IN PORTUGUESE. Use Markdown.",
+          description: description(
+            "Message explaining what information is missing and suggesting",
+            "examples IN PORTUGUESE.",
+            "Use Markdown.",
+          ),
         },
         userMessageSuggestions: {
           type: "array",
-          description:
-            "List of suggestions on how to complete or refine the prompt IN PORTUGUESE.",
+          description: description(
+            "List of suggestions on how to complete or refine the prompt",
+            "IN PORTUGUESE.",
+          ),
           items: { type: "string" },
         },
       },

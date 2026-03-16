@@ -20,7 +20,7 @@ Express.js 5 + TypeScript API that converts natural language (Portuguese) into s
 **Request flow:**
 1. User sends a natural language question → `POST /api/chat/conversations/:id/userMessage`
 2. Controller reconstructs full conversation history (replaying tool calls) and calls OpenAI
-3. OpenAI uses `tool_choice: "required"` to always call one of two tools: `execute_query` or `ask_followup`
+3. OpenAI uses `tool_choice: "required"` to always call one of three tools: `execute_query`, `ask_followup`, or `render_chart_config`
 4. Response is stored in-memory and returned to the client
 
 **Layered structure:**
@@ -32,12 +32,13 @@ Express.js 5 + TypeScript API that converts natural language (Portuguese) into s
 - `src/constants.ts` — System prompt (`MODEL_INSTRUCTIONS`), TypeScript types for OpenAI response schema
 - `src/services/open-ai.service.ts` — Calls `openai.responses.create()` with reasoning effort `"minimal"`, model `gpt-5-mini-2025-08-07`
 - `src/controllers/chat.controller.ts` — `buildOpenAIInput()` reconstructs multi-turn context by replaying stored tool calls
-- `data/llm-tool-definitions.json` — Tool definitions for `execute_query` and `ask_followup`
-- `src/services/weknow.service.ts` — WeKnow REST API client with SHA512 auth and in-memory metadata caching (not yet in main flow)
+- `src/models/tool-definitions.ts` — Tool definitions for `execute_query`, `ask_followup`, and `render_chart_config`
+- `src/services/weknow.service.ts` — WeKnow REST API client with SHA512 auth and in-memory metadata caching
 
 **Tools (`data/llm-tool-definitions.json`):**
-- `execute_query` — Generates a SQL SELECT query, selects render type (`CHART`/`TABLE`/`TEXT`), optionally produces Apache ECharts v6 JSON config
+- `execute_query` — Generates a SQL SELECT query, selects render type (`CHART`/`TABLE`/`TEXT`)
 - `ask_followup` — Requests clarification with a Portuguese message and follow-up question suggestions
+- `render_chart_config` — Generates Apache ECharts v6 JSON configuration for rendering charts
 
 **Render types:** `CHART` (ECharts v6 config), `TABLE` (structured data), `TEXT` (summary/aggregated value)
 
