@@ -11,9 +11,10 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
     type: "function",
     name: "execute_query",
     description: description(
-      "Execute a data query when enough information is available from the user.",
-      "The query will be executed by the system and results rendered to the user.",
-      "Always call this tool when you have sufficient information to build the query.",
+      "Execute a data query ONLY when the request is sufficiently specified.",
+      "Call this tool only if you can identify dimensions/measures, required filters, and aggregation intent without guessing.",
+      "If any required detail is missing or ambiguous, call ask_followup instead.",
+      "The query will be executed by the system and the result will be rendered to the user.",
       // "When a limit or top is requested, you must create and use a calculated field with a window function and a filter of type 'posWindowFunctionFilters'."
     ),
     parameters: {
@@ -39,23 +40,26 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
           type: "string",
           description: description(
             "Determines how the query result data should be rendered.",
-            "Use CHART for graphical visualizations, TABLE for tabular data display,",
-            "or TEXT when the answer can be conveyed as a simple text message (e.g., a single value or summary).",
-            "Consider user requests."
+            "Choose using this policy: CHART when the user explicitly asks for a chart/graph or when visual comparison is the clearest answer;",
+            "TABLE when row-level detail, listing, or comparisons across many records are needed;",
+            "TEXT ONLY when the result is a single scalar summary (for example, one KPI value).",
+            "If unclear, default to TABLE."
           ),
           enum: ["CHART", "TABLE", "TEXT"],
         },
         query: {
           type: "object",
           description: description(
-            "Query definitions: columns, sorting, calculated fields, filters, and post-aggregation (having) filters.",
+            "Query definitions: columns, sorting, calculated fields, pre-aggregation filters (WHERE), and post-aggregation filters (HAVING).",
             "This query will not be shown to the user.",
-            "The query result data/visualization will be shown to the user separately right after your message."
+            "The query result data/visualization will be shown to the user separately right after your message.",
+            "When using recsMax for top/limit behavior, include a deterministic sort to avoid unstable results."
           ),
           properties: {
             columns: {
               type: "array",
-              description: "List of column definitions.",
+              minItems: 1,
+              description: "List of output column definitions. Include all fields needed to answer the request.",
               items: {
                 type: "object",
                 properties: {
@@ -63,6 +67,7 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
                     type: "string",
                     description: description(
                       "Use the 'completeName' from the provided fields or calculated fields.",
+                      "When referencing a calculated field with hasAggregateFunction=true, set measureFunction to 0 (fnNone)."
                     ),
                   },
                   measureFunction: { $ref: "#/$defs/TMeasureFunction" },
@@ -77,7 +82,11 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
             },
             sort: {
               type: "array",
-              description: "List of sorting definitions.",
+              description: description(
+                "List of sorting definitions.",
+                "Use sort whenever the user asks for top/limit/ranking or when deterministic ordering matters.",
+                "Avoid direction=sdNone for explicit top/limit requests."
+              ),
               items: {
                 type: "object",
                 properties: {
@@ -85,6 +94,7 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
                     type: "string",
                     description: description(
                       "Use the 'completeName' from the provided fields or calculated fields.",
+                      "When referencing a calculated field with hasAggregateFunction=true, set measureFunction to 0 (fnNone)."
                     ),
                   },
                   direction: {
@@ -111,10 +121,11 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
               type: "array",
               description: description(
                 "List of calculated fields (ANSI SQL expressions) that can be defined and used in",
-                "columns, sorting, filters, and post-aggregation (having) filters,",
-                "where they must be referenced by the calculated field's 'completeName'.",
-                "This can be used when direct fields from the virtual table is not sufficient.",
-                "When a calculated field with 'hasAggregateFunction' equal to true is referenced, the 'measureFunction' property of the reference must always be set to 0 (fnNone)."
+                "columns, sorting, filters, and post-aggregation (having) filters.",
+                "A calculated field is effective only when referenced by its 'completeName' in columns, sort, filters, or havingFilters.",
+                "Use calculated fields when direct fields from the virtual table are not sufficient.",
+                "If a referenced calculated field has hasAggregateFunction=true, always set the reference measureFunction to 0 (fnNone).",
+                "Set hasAggregateFunction explicitly to avoid misinterpretation."
               ),
               items: {
                 type: "object",
@@ -130,33 +141,38 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
                   formula: {
                     type: "string",
                     description: description(
-                      "ANSI SQL expression that can contain aggregation functions",
-                      "(SUM, COUNT, AVG, etc.) and analytic functions",
-                      "(RANK, ROW_NUMBER, etc.). Provided fields can be referenced",
-                      "by the 'completeName' between '%', for example:",
-                      "'%$completeName%'.",
+                      "ANSI SQL expression that can contain aggregation functions (SUM, COUNT, AVG, etc.).",
+                      "Provided fields can be referenced by the 'completeName' between '%', for example: '%$completeName%'.",
+                      "Only use provided fields directly in the formula; do not reference another calculated field here.",
                     ),
                   },
                   hasAggregateFunction: {
                     type: "boolean",
                     description: description(
-                      "True if the formula contains an aggregation function",
-                      "(SUM, COUNT, AVG, etc.)",
+                      "Set to true if the formula contains an aggregation function",
+                      "(SUM, COUNT, AVG, MIN, MAX, etc.).",
                     ),
                   },
-                  hasAnalyticFunction: {
-                    type: "boolean",
-                    description: description(
-                      "True if the formula contains a window function such as",
-                      "RANK, ROW_NUMBER, etc.",
-                    ),
-                  },
+                  // hasAnalyticFunction: {
+                  //   type: "boolean",
+                  //   description: description(
+                  //     "Set to true if the formula contains a window function such as",
+                  //     "RANK, DENSE_RANK, ROW_NUMBER, etc.",
+                  //   ),
+                  // },
                   title: {
                     type: "string",
                     description: "Friendly title for display",
                   },
                 },
-                required: ["completeName", "formula"],
+                required: [
+                  "completeName",
+                  "dataType",
+                  "formula",
+                  "hasAggregateFunction",
+                  // "hasAnalyticFunction",
+                ],
+                additionalProperties: false,
               },
             },
             filters: { $ref: "#/$defs/TWhereFilters" },
@@ -165,7 +181,8 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
               type: "number",
               description: description(
                 "Maximum number of records to return.",
-                "Use this to limit the number of records when the user requests a 'limit' or 'top' in their prompt.",
+                "Use this when the user requests a limit/top N.",
+                "When recsMax is used, also provide sort criteria so the top/limit is deterministic.",
                 // "When this is used, you must create and use a calculated field with a window function and a filter of type 'posWindowFunctionFilters' to ensure correct results.",
               )
             },
@@ -183,8 +200,8 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
         TMeasureFunction: {
           type: "number",
           description: description(
-            "Enum for measures and aggregation functions; use fnNone when",
-            "referencing a calculated field with aggregation.",
+            "Enum for measure/aggregation functions.",
+            "Use fnNone (0) when referencing a calculated field with hasAggregateFunction=true.",
           ),
           enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
           oneOf: [
@@ -245,15 +262,15 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
         TWhereFilters: {
           type: "object",
           description: description(
-            "Definitions for WHERE filters, which can be nested recursively",
-            "to represent complex conditions.",
+            "Definitions for WHERE filters (pre-aggregation), recursively nestable for complex conditions.",
+            "Use WHERE for row-level filtering before any aggregation.",
           ),
           properties: {
             completeName: {
               type: "string",
               description: description(
-                "Use the 'completeName' from the provided fields or",
-                "calculated fields.",
+                "Use the 'completeName' from the provided fields or calculated fields.",
+                "If this references a calculated field with hasAggregateFunction=true, move the condition to havingFilters instead of filters.",
               ),
             },
             filters: {
@@ -284,15 +301,15 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
         THavingFilters: {
           type: "object",
           description: description(
-            "Definitions for HAVING filters, which can be nested recursively",
-            "to represent complex post-aggregation conditions.",
+            "Definitions for HAVING filters (post-aggregation), recursively nestable for complex conditions.",
+            "Use HAVING when filtering aggregated values (SUM, COUNT, AVG, etc.).",
           ),
           properties: {
             completeName: {
               type: "string",
               description: description(
-                "Use the 'completeName' from the provided fields or",
-                "calculated fields.",
+                "Use the 'completeName' from the provided fields or calculated fields.",
+                "For calculated fields with hasAggregateFunction=true, set measureFunction to 0 (fnNone).",
               ),
             },
             filters: {
@@ -364,6 +381,10 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
         // },
         TValues: {
           type: "array",
+          description: description(
+            "List of values used by the selected operator.",
+            "Use [] only when the operator semantics do not require explicit values.",
+          ),
           items: {
             anyOf: [
               { type: "string" },
@@ -384,8 +405,9 @@ export function getRenderChartToolDefinition(): FunctionTool {
     type: "function",
     name: "render_chart_config",
     description: description(
-      "Render an Apache ECharts chart to visualize the query result data.",
-      "The query result data will be provided in the conversation so you can inspect column names and value ranges to build an appropriate chart.",
+      "Render an Apache ECharts chart configuration to visualize query result data.",
+      "Call this tool only after execute_query has returned data in the conversation context.",
+      "Use the provided result columns and values to build a coherent and readable chart.",
     ),
     parameters: {
       type: "object",
@@ -394,11 +416,12 @@ export function getRenderChartToolDefinition(): FunctionTool {
           type: "object",
           description: description(
             "Apache ECharts configuration object.",
-            "Must use the 'dataset' option with 'dimensions' and 'source'.",
+            "Must include 'dataset' with 'dimensions' and 'source' mapped from the query result.",
             "Use friendly Portuguese titles/legends (e.g., 'DATA_EMISSAO' → 'Data de Emissão').",
             "Position legends below or beside the chart.",
             "Chart title must have padding so it does not stick to the chart (e.g., padding: [10, 0, 30, 0]).",
             "Axis titles should be centered and vertical where applicable.",
+            "Prefer readable defaults over excessive styling.",
           ),
           properties: {
             title: {
@@ -453,11 +476,10 @@ export function getAskFollowupToolDefinition(): FunctionTool {
     type: "function",
     name: "ask_followup",
     description: description(
-      "Ask the user for clarification or additional information when the",
-      "request is ambiguous or missing required details",
-      "(e.g., date range, specific fields, filters).",
-      "If you notice a required filter was not provided, use this tool to ask the user for clarification.",
-      "Call this instead of guessing.",
+      "Ask the user for clarification when the request is ambiguous or missing required details.",
+      "Use this tool when required filters, date ranges, grouping level, or metric intent are missing.",
+      "Call this instead of guessing or silently assuming defaults that change query meaning.",
+      "Ask one focused clarification at a time and provide actionable suggestion options.",
     ),
     parameters: {
       type: "object",
@@ -465,16 +487,17 @@ export function getAskFollowupToolDefinition(): FunctionTool {
         message: {
           type: "string",
           description: description(
-            "Message explaining what information is missing and suggesting",
-            "examples IN PORTUGUESE.",
+            "Message in PORTUGUESE explaining exactly which information is missing.",
+            "Provide short examples the user can copy or adapt.",
+            "Keep suggestions in userMessageSuggestions aligned with the message and focused on unblocking execution.",
             "Use Markdown.",
           ),
         },
         userMessageSuggestions: {
           type: "array",
           description: description(
-            "List of suggestions on how to complete or refine the prompt",
-            "IN PORTUGUESE.",
+            "List of concrete follow-up suggestions in PORTUGUESE that unblock execution.",
+            "Keep suggestions short, specific, and directly actionable.",
           ),
           items: { type: "string" },
         },
