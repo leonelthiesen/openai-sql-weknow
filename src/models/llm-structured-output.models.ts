@@ -21,7 +21,8 @@ export interface LLMQuery {
     sort: LLMQuerySort[];
     filters: LLMWhereFilters;
     havingFilters: LLMHavingFilters;
-    posWindowFunctionFilters: LLMPosWindowFunctionFilters
+    posWindowFunctionFilters: LLMPosWindowFunctionFilters;
+    recsMax?: number;
 }
 
 export interface LLMCalculatedField {

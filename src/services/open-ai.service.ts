@@ -106,35 +106,129 @@ export async function createModelResponse(
         };
     }
 
-    // ── execute_query: execute real query via WeKnow, optionally call render_chart_config ──
-    const structuredOutputForExec = {
-        action: "EXECUTE_QUERY" as const,
-        message: primaryArgs.message,
-        renderType: primaryArgs.renderType,
-        query: primaryArgs.query,
-        userMessageSuggestions: primaryArgs.userMessageSuggestions,
-    } satisfies LLMStructuredOutput;
+    // ── execute_query: execute real query via WeKnow, with retry on failure ──
+    const MAX_RETRY_ATTEMPTS = 3;
 
     let executionData: ExecutionData | undefined;
     let errorResponse: string | Object | undefined;
+    let currentCall = primaryCall;
+    let currentArgs = primaryArgs;
+    let lastResponse = firstResponse;
 
-    const executeInput = transformLLMToComponentExecuteInput(structuredOutputForExec, metadataId);
-    if (executeInput) {
+    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+        const structuredOutputForExec = {
+            action: "EXECUTE_QUERY" as const,
+            message: currentArgs.message,
+            renderType: currentArgs.renderType,
+            query: currentArgs.query,
+            userMessageSuggestions: currentArgs.userMessageSuggestions,
+        } satisfies LLMStructuredOutput;
+
+        const executeInput = transformLLMToComponentExecuteInput(structuredOutputForExec, metadataId);
+        if (!executeInput) break;
+
         try {
             const accessToken = await weknowService.getAccessToken();
             executeInput.accessToken = accessToken;
             const executeResult = await weknowService.executeComponent(JSON.stringify(executeInput));
             executionData = transformExecuteResult(executeResult);
+            errorResponse = undefined;
+            break; // Success — exit retry loop
         } catch (error: any) {
             errorResponse = error;
-            console.error("Erro ao executar componente no Weknow:", error);
+            const errorMessage = error?.message || error?.toString?.() || JSON.stringify(error);
+            console.error(`[openai] Tentativa ${attempt}/${MAX_RETRY_ATTEMPTS} falhou:`, errorMessage);
+
+            if (attempt >= MAX_RETRY_ATTEMPTS) {
+                console.error("[openai] Todas as tentativas falharam.");
+                break;
+            }
+
+            // Send error back to OpenAI so it can fix the query
+            const errorOutput = `Query execution failed with error: ${errorMessage}. Please fix the query and try again.`;
+
+            openAiItems.push({
+                type: "function_call_output",
+                callId: currentCall.call_id,
+                output: errorOutput,
+            });
+
+            const retryInput: ResponseInputItem[] = [
+                ...input,
+                ...(lastResponse.output as unknown as ResponseInputItem[]),
+                {
+                    type: "function_call_output",
+                    call_id: currentCall.call_id,
+                    output: errorOutput,
+                } as ResponseInputItem,
+            ];
+
+            const retryResponse = await openai.responses.create({
+                ...SHARED_OPTIONS,
+                instructions: MODEL_INSTRUCTIONS,
+                input: retryInput,
+                tools: [getExecuteQueryToolDefinition(), getAskFollowupToolDefinition()],
+                tool_choice: "required",
+            });
+
+            // Collect reasoning items from retry response
+            for (const item of retryResponse.output.filter((item) => item.type === "reasoning")) {
+                openAiItems.push({ type: "reasoning", reasoningItem: item });
+            }
+
+            const retryCalls = retryResponse.output.filter(
+                (item): item is OpenAI.Responses.ResponseFunctionToolCall =>
+                    item.type === "function_call"
+            );
+
+            if (retryCalls.length === 0 || retryCalls[0]!.name !== "execute_query") {
+                console.error(`[openai] Retry ${attempt}: model did not return execute_query`);
+                // If model switched to ask_followup, treat as final answer
+                if (retryCalls.length > 0 && retryCalls[0]!.name === "ask_followup") {
+                    const followupArgs = JSON.parse(retryCalls[0]!.arguments);
+                    openAiItems.push({
+                        type: "function_call",
+                        callId: retryCalls[0]!.call_id,
+                        name: retryCalls[0]!.name,
+                        arguments: retryCalls[0]!.arguments,
+                    });
+                    openAiItems.push({
+                        type: "function_call_output",
+                        callId: retryCalls[0]!.call_id,
+                        output: "Message delivered to the user.",
+                    });
+                    return {
+                        structuredOutput: {
+                            action: "FOLLOWUP_NEEDED",
+                            message: followupArgs.message,
+                            userMessageSuggestions: followupArgs.userMessageSuggestions,
+                        },
+                        openAiItems,
+                        errorResponse,
+                    };
+                }
+                break;
+            }
+
+            currentCall = retryCalls[0]!;
+            currentArgs = JSON.parse(currentCall.arguments);
+            lastResponse = retryResponse;
+
+            openAiItems.push({
+                type: "function_call",
+                callId: currentCall.call_id,
+                name: currentCall.name,
+                arguments: currentCall.arguments,
+            });
+
+            console.log(`[openai] Retry ${attempt}: nova query gerada: ${currentArgs.query}`);
         }
     }
 
     // Use real data if available, otherwise fall back to fake data for the LLM context
     const dataForLLM = executionData
         ? { dimensions: executionData.dimensions, source: executionData.source.slice(0, 20) }
-        : generateFakeData(primaryArgs.query);
+        : generateFakeData(currentArgs.query);
 
     // Collect function_call_output for execute_query
     const executeQueryOutput = executionData
@@ -143,7 +237,7 @@ export async function createModelResponse(
 
     const executeQueryFunctionCallOutput: OpenAiItem = {
         type: "function_call_output" as const,
-        callId: primaryCall.call_id,
+        callId: currentCall.call_id,
         output: executeQueryOutput,
     }
 
@@ -151,7 +245,7 @@ export async function createModelResponse(
 
     let chartConfig: object | undefined;
 
-    if (primaryArgs.renderType === "CHART") {
+    if (currentArgs.renderType === "CHART") {
         // ── Second call: render_chart_config ──────────────────────────────
         const developerContent = [
             "The execute_query tool was called and sample query results are provided.",
@@ -167,7 +261,7 @@ export async function createModelResponse(
 
         const secondCallInput: ResponseInputItem[] = [
             ...input,
-            ...(firstResponse.output as unknown as ResponseInputItem[]),
+            ...(lastResponse.output as unknown as ResponseInputItem[]),
             {
                 type: executeQueryFunctionCallOutput.type,
                 call_id: executeQueryFunctionCallOutput.callId || "",
@@ -216,10 +310,10 @@ export async function createModelResponse(
     return {
         structuredOutput: {
             action: "EXECUTE_QUERY",
-            message: primaryArgs.message,
-            userMessageSuggestions: primaryArgs.userMessageSuggestions,
-            renderType: primaryArgs.renderType,
-            query: primaryArgs.query,
+            message: currentArgs.message,
+            userMessageSuggestions: currentArgs.userMessageSuggestions,
+            renderType: currentArgs.renderType,
+            query: currentArgs.query,
             chartConfig,
         },
         openAiItems,

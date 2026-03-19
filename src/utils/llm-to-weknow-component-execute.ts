@@ -116,7 +116,7 @@ export function transformLLMToComponentExecuteInput (
     // Converte os filtros
     const whereFilters = query.filters ? convertWhereFilters(query.filters) : undefined;
     const havingFilters = query.havingFilters ? convertHavingAndPosWindowFilters(query.havingFilters) : undefined;
-    const posWindowFunctionFilters = query.posWindowFunctionFilters ? convertHavingAndPosWindowFilters(query.posWindowFunctionFilters) : undefined;
+    // const posWindowFunctionFilters = query.posWindowFunctionFilters ? convertHavingAndPosWindowFilters(query.posWindowFunctionFilters) : undefined;
 
     // Monta o objeto final
     const executeInput: TComponentApi_TExecuteInputCustom = {
@@ -133,10 +133,11 @@ export function transformLLMToComponentExecuteInput (
                 columns: columns,
                 gridBaseType: TGridBaseType.gbtSingleDimension,
                 havingFilters: havingFilters,
-                posWindowFunctionFilters: posWindowFunctionFilters,
+                // posWindowFunctionFilters: posWindowFunctionFilters,
                 sort: sort,
             }
-        }
+        },
+        recsMax: query.recsMax  // TODO: Celito alertou que vai dar merda
     };
 
     return executeInput;

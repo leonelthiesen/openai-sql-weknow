@@ -14,7 +14,7 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
       "Execute a data query when enough information is available from the user.",
       "The query will be executed by the system and results rendered to the user.",
       "Always call this tool when you have sufficient information to build the query.",
-      "When a limit or top is requested, you must create and use a calculated field with a window function and a filter of type 'posWindowFunctionFilters'."
+      // "When a limit or top is requested, you must create and use a calculated field with a window function and a filter of type 'posWindowFunctionFilters'."
     ),
     parameters: {
       type: "object",
@@ -161,9 +161,17 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
             },
             filters: { $ref: "#/$defs/TWhereFilters" },
             havingFilters: { $ref: "#/$defs/THavingFilters" },
-            posWindowFunctionFilters: {
-              $ref: "#/$defs/TPosWindowFunctionFilter",
+            recsMax: {
+              type: "number",
+              description: description(
+                "Maximum number of records to return.",
+                "Use this to limit the number of records when the user requests a 'limit' or 'top' in their prompt.",
+                // "When this is used, you must create and use a calculated field with a window function and a filter of type 'posWindowFunctionFilters' to ensure correct results.",
+              )
             },
+            // posWindowFunctionFilters: {
+            //   $ref: "#/$defs/TPosWindowFunctionFilter",
+            // },
           },
           required: ["columns"],
           additionalProperties: false,
@@ -314,46 +322,46 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
           ],
           additionalProperties: false,
         },
-        TPosWindowFunctionFilter: {
-          type: "object",
-          description: description(
-            "Definitions for filters that use window functions.",
-          ),
-          properties: {
-            completeName: {
-              type: "string",
-              description: description(
-                "Use the 'completeName' from the provided fields or",
-                "calculated fields.",
-              ),
-            },
-            filters: {
-              type: "array",
-              items: { $ref: "#/$defs/TPosWindowFunctionFilter" },
-              description: "Recursive list for nested filters",
-            },
-            join: { $ref: "#/$defs/TBooleanOperator" },
-            measureFunction: { $ref: "#/$defs/TMeasureFunction" },
-            not: {
-              type: "boolean",
-              description: description(
-                "Indicates whether the filter condition should be negated",
-              ),
-            },
-            operator: { $ref: "#/$defs/TComparisonOperator" },
-            values: { $ref: "#/$defs/TValues" },
-          },
-          required: [
-            "completeName",
-            "filters",
-            "join",
-            "measureFunction",
-            "not",
-            "operator",
-            "values",
-          ],
-          additionalProperties: false,
-        },
+        // TPosWindowFunctionFilter: {
+        //   type: "object",
+        //   description: description(
+        //     "Definitions for filters that use window functions.",
+        //   ),
+        //   properties: {
+        //     completeName: {
+        //       type: "string",
+        //       description: description(
+        //         "Use the 'completeName' from the provided fields or",
+        //         "calculated fields.",
+        //       ),
+        //     },
+        //     filters: {
+        //       type: "array",
+        //       items: { $ref: "#/$defs/TPosWindowFunctionFilter" },
+        //       description: "Recursive list for nested filters",
+        //     },
+        //     join: { $ref: "#/$defs/TBooleanOperator" },
+        //     measureFunction: { $ref: "#/$defs/TMeasureFunction" },
+        //     not: {
+        //       type: "boolean",
+        //       description: description(
+        //         "Indicates whether the filter condition should be negated",
+        //       ),
+        //     },
+        //     operator: { $ref: "#/$defs/TComparisonOperator" },
+        //     values: { $ref: "#/$defs/TValues" },
+        //   },
+        //   required: [
+        //     "completeName",
+        //     "filters",
+        //     "join",
+        //     "measureFunction",
+        //     "not",
+        //     "operator",
+        //     "values",
+        //   ],
+        //   additionalProperties: false,
+        // },
         TValues: {
           type: "array",
           items: {
@@ -376,7 +384,7 @@ export function getRenderChartToolDefinition(): FunctionTool {
     type: "function",
     name: "render_chart_config",
     description: description(
-      "Render an Apache ECharts version 6 chart configuration to visualize the query result data.",
+      "Render an Apache ECharts chart to visualize the query result data.",
       "The query result data will be provided in the conversation so you can inspect column names and value ranges to build an appropriate chart.",
     ),
     parameters: {
@@ -385,7 +393,7 @@ export function getRenderChartToolDefinition(): FunctionTool {
         chartConfig: {
           type: "object",
           description: description(
-            "Apache ECharts version 6 configuration object.",
+            "Apache ECharts configuration object.",
             "Must use the 'dataset' option with 'dimensions' and 'source'.",
             "Use friendly Portuguese titles/legends (e.g., 'DATA_EMISSAO' → 'Data de Emissão').",
             "Position legends below or beside the chart.",

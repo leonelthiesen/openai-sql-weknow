@@ -38,7 +38,7 @@ Express.js 5 + TypeScript API that converts natural language (Portuguese) into s
 **Tools (`data/llm-tool-definitions.json`):**
 - `execute_query` — Generates a SQL SELECT query, selects render type (`CHART`/`TABLE`/`TEXT`)
 - `ask_followup` — Requests clarification with a Portuguese message and follow-up question suggestions
-- `render_chart_config` — Generates Apache ECharts v6 JSON configuration for rendering charts
+- `render_chart_config` — Generates Apache ECharts JSON configuration for rendering charts
 
 **Render types:** `CHART` (ECharts v6 config), `TABLE` (structured data), `TEXT` (summary/aggregated value)
 

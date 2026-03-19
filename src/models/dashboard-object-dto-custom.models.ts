@@ -107,4 +107,5 @@ export interface TComponentApi_TExecuteInputCustom {
       }[],
     }
   },
+  recsMax?: number,
 }
