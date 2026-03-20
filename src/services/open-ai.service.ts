@@ -10,7 +10,11 @@ import { generateFakeData } from "../utils/fake-data";
 import type { ExecutionData, OpenAiItem } from "./chat.service";
 import * as weknowService from "./weknow.service";
 import { transformLLMToComponentExecuteInput } from "../utils/llm-to-weknow-component-execute";
-import type { LLMStructuredOutput } from "../models/llm-structured-output.models";
+import type {
+    LLMStructuredOutput,
+    SimplifiedChartDefinition,
+} from "../models/llm-structured-output.models";
+import { transformChartDefinitionToECharts } from "../utils/chart-definition-to-echarts";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -27,6 +31,18 @@ export interface ToolCallResult {
     openAiItems: OpenAiItem[];
     executionData?: ExecutionData;
     errorResponse?: string | Object;
+}
+
+function toErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    if (typeof error === "string") {
+        return error;
+    }
+
+    return JSON.stringify(error);
 }
 
 function transformExecuteResult(data: any): ExecutionData {
@@ -250,6 +266,8 @@ export async function createModelResponse(
         const developerContent = [
             "The execute_query tool was called and sample query results are provided.",
             "Use this information to render an appropriate chart.",
+            // "Generate a simplified chart definition (not Apache ECharts JSON).",
+            // "The backend will transform your definition into Apache ECharts.",
         ].join("\n");
 
         // Add developer message to openAiItems
@@ -289,6 +307,18 @@ export async function createModelResponse(
         if (chartCalls.length > 0) {
             const chartCall = chartCalls[0]!;
             chartConfig = JSON.parse(chartCall.arguments).chartConfig;
+            // const chartDefinition = JSON.parse(chartCall.arguments)
+            //     .chartDefinition as SimplifiedChartDefinition;
+
+            // const chartExecutionData = executionData ?? dataForLLM;
+
+            // try {
+            //     chartConfig = transformChartDefinitionToECharts(chartDefinition, chartExecutionData);
+            // } catch (error: unknown) {
+            //     const errorMessage = toErrorMessage(error);
+            //     console.error("[openai] Erro ao transformar definicao simplificada de grafico:", errorMessage);
+            //     errorResponse = errorMessage;
+            // }
 
             // Collect chart function_call and output
             openAiItems.push({

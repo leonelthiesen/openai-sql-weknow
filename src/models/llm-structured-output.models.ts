@@ -6,11 +6,61 @@ import { TSortDirection } from "./TSortDirection";
 
 export type LLMStructuredOutputAction = "FOLLOWUP_NEEDED" | "EXECUTE_QUERY";
 
+export type SimplifiedChartType = "bar" | "line" | "area" | "pie";
+export type SimplifiedChartSeriesType = "bar" | "line" | "area";
+export type SimplifiedAxisPosition = "left" | "right";
+export type SimplifiedAxisFormat = "number" | "currency" | "percent";
+export type SimplifiedLegendPosition = "bottom" | "right" | "top" | "left" | "none";
+export type SimplifiedFormatterFunction = string;
+
+export interface SimplifiedChartAxisDefinition {
+    index: number;
+    name?: string;
+    position?: SimplifiedAxisPosition;
+    format?: SimplifiedAxisFormat;
+    formatterFunction?: SimplifiedFormatterFunction;
+    currencySymbol?: string;
+    decimals?: number;
+    min?: number;
+    max?: number;
+}
+
+export interface SimplifiedChartSeriesDefinition {
+    field: string;
+    name: string;
+    seriesType?: SimplifiedChartSeriesType;
+    yAxisIndex?: number;
+    stackGroup?: number;
+    color?: string;
+    smooth?: boolean;
+    showLabels?: boolean;
+    labelFormatterFunction?: SimplifiedFormatterFunction;
+}
+
+export interface SimplifiedChartLegendDefinition {
+    position?: SimplifiedLegendPosition;
+}
+
+export interface SimplifiedChartTooltipDefinition {
+    formatterFunction?: SimplifiedFormatterFunction;
+}
+
+export interface SimplifiedChartDefinition {
+    chartType: SimplifiedChartType;
+    categoryField: string;
+    title?: string;
+    series: SimplifiedChartSeriesDefinition[];
+    axes?: SimplifiedChartAxisDefinition[];
+    legend?: SimplifiedChartLegendDefinition;
+    tooltip?: SimplifiedChartTooltipDefinition;
+}
+
 export interface LLMStructuredOutput {
     action: LLMStructuredOutputAction;
     message: string;
     userMessageSuggestions: string[];
     query: LLMQuery;
+    // chartConfig?: SimplifiedChartDefinition;
     chartConfig?: any;
     renderType: 'CHART' | 'TABLE' | 'TEXT';
 }
