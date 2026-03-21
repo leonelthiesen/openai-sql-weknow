@@ -6,6 +6,32 @@ function description(...lines: string[]): string {
   return lines.join(" ");
 }
 
+export function getDefineOutputFormatToolDefinition(): FunctionTool {
+  return {
+    type: "function",
+    name: "define_output_format",
+    description: description(
+      "Define the output format for the final answer to the user.",
+      "Use this tool at the beginning of the conversation when the user has a specific format requirement for the answer (for example, a JSON structure, a specific chart type, or a particular textual layout).",
+      "If the user does not have specific format requirements, do not call this tool and provide the answer in a clear and readable format using Markdown.",
+    ),
+    parameters: {
+        renderType: {
+          type: "string",
+          description: description(
+            "Determines the type of the output format the user wants.",
+            "Choose using this policy: CHART when the user explicitly asks for a chart/graph or when visual comparison is the clearest answer;",
+            "TABLE when row-level detail, listing, or comparisons across many records are needed;",
+            "TEXT ONLY when the result is a single scalar summary (for example, one KPI value).",
+            "If unclear, default to TABLE."
+          ),
+          enum: ["CHART", "TABLE", "TEXT"],
+        },
+    },
+    strict: false,
+  };
+}
+
 export function getExecuteQueryToolDefinition(): FunctionTool {
   return {
     type: "function",
@@ -15,7 +41,6 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
       "Call this tool only if you can identify dimensions/measures, required filters, and aggregation intent without guessing.",
       "If any required detail is missing or ambiguous, call ask_followup instead.",
       "The query will be executed by the system and the result will be rendered to the user.",
-      // "When a limit or top is requested, you must create and use a calculated field with a window function and a filter of type 'posWindowFunctionFilters'."
     ),
     parameters: {
       type: "object",
@@ -149,13 +174,6 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
                       "(SUM, COUNT, AVG, MIN, MAX, etc.).",
                     ),
                   },
-                  // hasAnalyticFunction: {
-                  //   type: "boolean",
-                  //   description: description(
-                  //     "Set to true if the formula contains a window function such as",
-                  //     "RANK, DENSE_RANK, ROW_NUMBER, etc.",
-                  //   ),
-                  // },
                   title: {
                     type: "string",
                     description: "Friendly title in PORTUGUESE for display",
@@ -166,7 +184,6 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
                   "dataType",
                   "formula",
                   "hasAggregateFunction",
-                  // "hasAnalyticFunction",
                 ],
                 additionalProperties: false,
               },
@@ -179,12 +196,8 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
                 "Maximum number of records to return.",
                 "Use this when the user requests a limit/top N.",
                 "When recsMax is used, also provide sort criteria so the top/limit is deterministic.",
-                // "When this is used, you must create and use a calculated field with a window function and a filter of type 'posWindowFunctionFilters' to ensure correct results.",
               )
             },
-            // posWindowFunctionFilters: {
-            //   $ref: "#/$defs/TPosWindowFunctionFilter",
-            // },
           },
           required: ["columns"],
           additionalProperties: false,
@@ -335,46 +348,6 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
           ],
           additionalProperties: false,
         },
-        // TPosWindowFunctionFilter: {
-        //   type: "object",
-        //   description: description(
-        //     "Definitions for filters that use window functions.",
-        //   ),
-        //   properties: {
-        //     completeName: {
-        //       type: "string",
-        //       description: description(
-        //         "Use the 'completeName' from the provided fields or",
-        //         "calculated fields.",
-        //       ),
-        //     },
-        //     filters: {
-        //       type: "array",
-        //       items: { $ref: "#/$defs/TPosWindowFunctionFilter" },
-        //       description: "Recursive list for nested filters",
-        //     },
-        //     join: { $ref: "#/$defs/TBooleanOperator" },
-        //     measureFunction: { $ref: "#/$defs/TMeasureFunction" },
-        //     not: {
-        //       type: "boolean",
-        //       description: description(
-        //         "Indicates whether the filter condition should be negated",
-        //       ),
-        //     },
-        //     operator: { $ref: "#/$defs/TComparisonOperator" },
-        //     values: { $ref: "#/$defs/TValues" },
-        //   },
-        //   required: [
-        //     "completeName",
-        //     "filters",
-        //     "join",
-        //     "measureFunction",
-        //     "not",
-        //     "operator",
-        //     "values",
-        //   ],
-        //   additionalProperties: false,
-        // },
         TValues: {
           type: "array",
           description: description(
@@ -391,6 +364,23 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
           },
         },
       },
+    },
+    strict: false,
+  };
+}
+
+
+export function getExecuteChartToolDefinition(): FunctionTool {
+  return {
+    type: "function",
+    name: "execute_chart",
+    description: description(
+      "Execute a data query ONLY when the request is sufficiently specified.",
+      "Call this tool only if you can identify dimensions/measures, required filters, and aggregation intent without guessing.",
+      "If any required detail is missing or ambiguous, call ask_followup instead.",
+      "The query will be executed by the system and the result will be rendered to the user.",
+    ),
+    parameters: {
     },
     strict: false,
   };
@@ -466,159 +456,6 @@ export function getRenderChartToolDefinition(): FunctionTool {
     strict: false,
   };
 }
-
-// export function getRenderChartToolDefinition(): FunctionTool {
-//   return {
-//     type: "function",
-//     name: "render_chart_config",
-//     description: description(
-//       "Generate a simplified chart definition to visualize query result data.",
-//       "Call this tool only after execute_query has returned data in the conversation context.",
-//       "Do not generate Apache ECharts config directly; the backend converts your definition to ECharts.",
-//       "Support one or more series and explicit axis binding for multi-scale charts.",
-//       "When providing formatter fields, always use JavaScript function syntax: function (...) { ... }.",
-//     ),
-//     parameters: {
-//       type: "object",
-//       properties: {
-//         chartDefinition: {
-//           type: "object",
-//           description: description(
-//             "Simplified chart definition for backend transformation.",
-//             "Use field names exactly as they appear in query result dimensions.",
-//             "All texts should be in PORTUGUESE.",
-//           ),
-//           properties: {
-//             chartType: {
-//               type: "string",
-//               enum: ["bar", "line", "area", "pie"],
-//               description: "Main chart type.",
-//             },
-//             categoryField: {
-//               type: "string",
-//               description: "Dimension field used as category axis or pie labels.",
-//             },
-//             title: {
-//               type: "string",
-//               description: "Chart title in PORTUGUESE.",
-//             },
-//             legend: {
-//               type: "object",
-//               properties: {
-//                 position: {
-//                   type: "string",
-//                   enum: ["bottom", "right", "top", "left", "none"],
-//                 },
-//               },
-//               required: ["position"],
-//               additionalProperties: false,
-//             },
-//             tooltip: {
-//               type: "object",
-//               properties: {
-//                 formatterFunction: {
-//                   type: "string",
-//                   description: "ECharts tooltip formatter in function format only, e.g. function (params) { return params[0].name; }",
-//                 },
-//               },
-//               additionalProperties: false,
-//             },
-//             series: {
-//               type: "array",
-//               minItems: 1,
-//               items: {
-//                 type: "object",
-//                 properties: {
-//                   field: {
-//                     type: "string",
-//                     description: "Numeric field to plot as a series.",
-//                   },
-//                   name: {
-//                     type: "string",
-//                     description: "Series display name in PORTUGUESE.",
-//                   },
-//                   seriesType: {
-//                     type: "string",
-//                     enum: ["bar", "line", "area"],
-//                     description: "Per-series override type.",
-//                   },
-//                   yAxisIndex: {
-//                     type: "number",
-//                     description: "Axis index used by this series (0, 1, ...).",
-//                   },
-//                   stackGroup: {
-//                     type: "number",
-//                     description: "Optional stack group id.",
-//                   },
-//                   color: {
-//                     type: "string",
-//                   },
-//                   smooth: {
-//                     type: "boolean",
-//                   },
-//                   showLabels: {
-//                     type: "boolean",
-//                   },
-//                   labelFormatterFunction: {
-//                     type: "string",
-//                     description: "ECharts label formatter in function format only, e.g. function (params) { return params.value; }",
-//                   },
-//                 },
-//                 required: ["field", "name"],
-//                 additionalProperties: false,
-//               },
-//             },
-//             axes: {
-//               type: "array",
-//               items: {
-//                 type: "object",
-//                 properties: {
-//                   index: {
-//                     type: "number",
-//                   },
-//                   name: {
-//                     type: "string",
-//                   },
-//                   position: {
-//                     type: "string",
-//                     enum: ["left", "right"],
-//                   },
-//                   format: {
-//                     type: "string",
-//                     enum: ["number", "currency", "percent"],
-//                   },
-//                   formatterFunction: {
-//                     type: "string",
-//                     description: "ECharts axis label formatter in function format only, e.g. function (value) { return value + '%'; }",
-//                   },
-//                   currencySymbol: {
-//                     type: "string",
-//                   },
-//                   decimals: {
-//                     type: "number",
-//                   },
-//                   min: {
-//                     type: "number",
-//                   },
-//                   max: {
-//                     type: "number",
-//                   },
-//                 },
-//                 required: ["index"],
-//                 additionalProperties: false,
-//               },
-//             },
-//           },
-//           required: ["chartType", "categoryField", "series"],
-//           additionalProperties: false,
-//         },
-//       },
-//       required: ["chartDefinition"],
-//       additionalProperties: false,
-//     },
-//     strict: false,
-//   };
-// }
 
 export function getAskFollowupToolDefinition(): FunctionTool {
   return {

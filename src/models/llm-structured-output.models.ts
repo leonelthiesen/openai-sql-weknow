@@ -75,6 +75,9 @@ export interface LLMQuery {
     recsMax?: number;
 }
 
+export interface LLMChart {
+}
+
 export interface LLMCalculatedField {
     completeName?: string,
     dataType?: TFieldType,
