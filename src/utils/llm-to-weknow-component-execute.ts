@@ -1,5 +1,5 @@
-import { LLMHavingFilters, LLMPosWindowFunctionFilters, LLMQueryColumn, LLMStructuredOutput, LLMWhereFilters } from "../models/llm-structured-output.models";
-import { TComponentApi_TExecuteInputCustom, TCustomFilterValueMode, TCustomHavingFilter, TCustomWhereFilter } from "../models/dashboard-object-dto-custom.models";
+import { LLMHavingFilters, LLMStructuredOutput, LLMWhereFilters } from "../models/llm-structured-output.models";
+import { TComponentApi_TExecutePivotTableCustomInput, TCustomFilterValueMode, TCustomHavingFilter, TCustomWhereFilter } from "../models/dashboard-object-dto-custom.models";
 import { TGridBaseType } from "../models/TGridBaseType";
 import { TComponentType } from "../models/TComponentType";
 import { TMeasureFunction } from "../models/TMeasureFunction";
@@ -36,7 +36,7 @@ function convertWhereFilters (llmFilters: LLMWhereFilters): TCustomWhereFilter |
 /**
  * Converte LLMHavingFilters para TCustomHavingFilter
  */
-function convertHavingAndPosWindowFilters (llmFilters: LLMHavingFilters | LLMPosWindowFunctionFilters): TCustomHavingFilter | undefined {
+function convertHavingFilters (llmFilters: LLMHavingFilters): TCustomHavingFilter | undefined {
     if (!llmFilters || !llmFilters.completeName) {
         return undefined;
     }
@@ -57,31 +57,34 @@ function convertHavingAndPosWindowFilters (llmFilters: LLMHavingFilters | LLMPos
     }
 
     if (llmFilters.filters && llmFilters.filters.length > 0) {
-        filter.filters = llmFilters.filters.map(f => convertHavingAndPosWindowFilters(f)).filter(f => f !== undefined) as TCustomHavingFilter[];
+        filter.filters = llmFilters.filters.map(f => convertHavingFilters(f)).filter(f => f !== undefined) as TCustomHavingFilter[];
     }
 
     return filter;
 }
 
 /**
- * Transforma uma mensagem LLMStructuredOutput em TComponentApi_TExecuteInputCustom
- * @param botMessage - Mensagem do bot com conteúdo estruturado
- * @param metadataId - ID do metadata para execução
- * @returns Objeto no formato TComponentApi_TExecuteInputCustom ou null se não for possível converter
+ * Transforma uma mensagem LLMStructuredOutput em TComponentApi_TExecutePivotTableCustomInput
+ * Usa gridBaseType gbtMultiDimension (pivot table) com cols/rows/measures.
+ *
+ * Mapeamento:
+ * - query.seriesDimensions → gridView.cols (séries/colunas, section 16)
+ * - query.categoryDimensions → gridView.rows (categorias/rótulos, section 17)
+ * - query.measures → gridView.measures (medidas, section 15)
+ * - query.seriesSort → gridView.colSort
+ * - query.categorySort → gridView.rowSort
  */
 export function transformLLMToComponentExecuteInput (
     botMessageContent: string | LLMStructuredOutput,
     metadataId: number
-): TComponentApi_TExecuteInputCustom | null {
-    // Verifica se o conteúdo é do tipo LLMStructuredOutput
+): TComponentApi_TExecutePivotTableCustomInput | null {
     if (typeof botMessageContent === 'string') {
         return null;
     }
 
     const llmOutput = botMessageContent as LLMStructuredOutput;
 
-    // Verifica se a ação é EXECUTE_QUERY
-    if (llmOutput.action !== 'EXECUTE_QUERY' || !llmOutput.query) {
+    if (llmOutput.action !== 'EXTRACT_DATA' || !llmOutput.query) {
         return null;
     }
 
@@ -97,30 +100,55 @@ export function transformLLMToComponentExecuteInput (
         title: cf.title
     })) || [];
 
-    // Converte as colunas
-    const columns = query.columns?.filter((col: LLMQueryColumn) => col.completeName)?.map((col: LLMQueryColumn) => ({
-        completeName: col.completeName,
-        distinct: col.distinct,
-        measureFunction: col.measureFunction || TMeasureFunction.fnNone,
-        title: col.title,
-        viewMode: 0
-    })) || [];
+    // cols = séries (section 16)
+    const cols = (query.seriesDimensions ?? [])
+        .filter(dim => dim.completeName)
+        .map(dim => ({
+            completeName: dim.completeName,
+            title: dim.title,
+        }));
 
-    // Converte o sort
-    const sort = query.sort?.filter(s => s.completeName)?.map(s => ({
-        completeName: s.completeName,
-        direction: s.direction,
-        measureFunction: s.measureFunction || TMeasureFunction.fnNone
-    })) || [];
+    // rows = categorias (section 17)
+    const rows = (query.categoryDimensions ?? [])
+        .filter(dim => dim.completeName)
+        .map(dim => ({
+            completeName: dim.completeName,
+            title: dim.title,
+        }));
+
+    // measures (section 15)
+    const measures = (query.measures ?? [])
+        .filter(m => m.completeName)
+        .map(m => ({
+            completeName: m.completeName,
+            measureFunction: m.measureFunction || TMeasureFunction.fnNone,
+            title: m.title,
+        }));
+
+    // colSort = seriesSort
+    const colSort = (query.seriesSort ?? [])
+        .filter(s => s.completeName)
+        .map(s => ({
+            completeName: s.completeName,
+            direction: s.direction,
+            measureFunction: s.measureFunction || TMeasureFunction.fnNone,
+        }));
+
+    // rowSort = categorySort
+    const rowSort = (query.categorySort ?? [])
+        .filter(s => s.completeName)
+        .map(s => ({
+            completeName: s.completeName,
+            direction: s.direction,
+            measureFunction: s.measureFunction || TMeasureFunction.fnNone,
+        }));
 
     // Converte os filtros
     const whereFilters = query.filters ? convertWhereFilters(query.filters) : undefined;
-    const havingFilters = query.havingFilters ? convertHavingAndPosWindowFilters(query.havingFilters) : undefined;
-    // const posWindowFunctionFilters = query.posWindowFunctionFilters ? convertHavingAndPosWindowFilters(query.posWindowFunctionFilters) : undefined;
+    const havingFilters = query.havingFilters ? convertHavingFilters(query.havingFilters) : undefined;
 
-    // Monta o objeto final
-    const executeInput: TComponentApi_TExecuteInputCustom = {
-    // const executeInput: any = {
+    // Monta o objeto final (pivot table)
+    const executeInput: TComponentApi_TExecutePivotTableCustomInput = {
         contents: {
             calculatedFields: calculatedFields.length > 0 ? calculatedFields : undefined,
             dataSource: {
@@ -130,14 +158,16 @@ export function transformLLMToComponentExecuteInput (
             type: TComponentType.ctGrid,
             whereFilters: whereFilters,
             gridView: {
-                columns: columns,
-                gridBaseType: TGridBaseType.gbtSingleDimension,
+                gridBaseType: TGridBaseType.gbtMultiDimension,
+                cols: cols.length > 0 ? cols : undefined,
+                rows: rows.length > 0 ? rows : undefined,
+                measures: measures.length > 0 ? measures : undefined,
+                colSort: colSort.length > 0 ? colSort : undefined,
+                rowSort: rowSort.length > 0 ? rowSort : undefined,
                 havingFilters: havingFilters,
-                // posWindowFunctionFilters: posWindowFunctionFilters,
-                sort: sort,
             }
         },
-        recsMax: query.recsMax  // TODO: Celito alertou que vai dar merda
+        recsMax: query.recsMax
     };
 
     return executeInput;

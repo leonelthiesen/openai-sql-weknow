@@ -4,7 +4,7 @@ import { TFieldType } from "./TFieldType";
 import { TMeasureFunction } from "./TMeasureFunction";
 import { TSortDirection } from "./TSortDirection";
 
-export type LLMStructuredOutputAction = "FOLLOWUP_NEEDED" | "EXECUTE_QUERY";
+export type LLMStructuredOutputAction = "FOLLOWUP_NEEDED" | "EXTRACT_DATA";
 
 export type SimplifiedChartType = "bar" | "line" | "area" | "pie";
 export type SimplifiedChartSeriesType = "bar" | "line" | "area";
@@ -65,17 +65,33 @@ export interface LLMStructuredOutput {
     renderType: 'CHART' | 'TABLE' | 'TEXT';
 }
 
-export interface LLMQuery {
-    calculatedFields: LLMCalculatedField[];
-    columns: LLMQueryColumn[];
-    sort: LLMQuerySort[];
-    filters: LLMWhereFilters;
-    havingFilters: LLMHavingFilters;
-    posWindowFunctionFilters: LLMPosWindowFunctionFilters;
-    recsMax?: number;
+export interface LLMDimension {
+    completeName: string;
+    title: string;
 }
 
-export interface LLMChart {
+export interface LLMMeasure {
+    completeName: string;
+    measureFunction: TMeasureFunction;
+    title: string;
+}
+
+export interface LLMSort {
+    completeName: string;
+    direction: TSortDirection;
+    measureFunction: TMeasureFunction;
+}
+
+export interface LLMQuery {
+    calculatedFields: LLMCalculatedField[];
+    categoryDimensions: LLMDimension[];
+    seriesDimensions?: LLMDimension[];
+    measures: LLMMeasure[];
+    categorySort?: LLMSort[];
+    seriesSort?: LLMSort[];
+    filters: LLMWhereFilters;
+    havingFilters: LLMHavingFilters;
+    recsMax?: number;
 }
 
 export interface LLMCalculatedField {
@@ -85,19 +101,6 @@ export interface LLMCalculatedField {
     hasAggregateFunction?: boolean,
     hasAnalyticFunction?: boolean,
     title?: string,
-}
-
-export interface LLMQueryColumn {
-    completeName: string;
-    distinct: boolean;
-    measureFunction: TMeasureFunction;
-    title: string;
-}
-
-export interface LLMQuerySort {
-    completeName: string;
-    direction: TSortDirection;
-    measureFunction: TMeasureFunction;
 }
 
 export type LLMFilterValue = string | number | boolean | null;
@@ -114,16 +117,6 @@ export interface LLMWhereFilters {
 export interface LLMHavingFilters {
     completeName: string;
     filters: LLMHavingFilters[];
-    join: TBooleanOperator;
-    measureFunction: TMeasureFunction;
-    not: boolean;
-    operator: TComparisonOperator;
-    values: LLMFilterValue[];
-}
-
-export interface LLMPosWindowFunctionFilters {
-    completeName: string;
-    filters: LLMPosWindowFunctionFilters[];
     join: TBooleanOperator;
     measureFunction: TMeasureFunction;
     not: boolean;

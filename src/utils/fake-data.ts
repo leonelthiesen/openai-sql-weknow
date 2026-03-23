@@ -5,15 +5,22 @@ import { faker } from "@faker-js/faker";
  * transformExecuteResult: { dimensions: string[], source: (string | number | null)[][] }
  */
 export function generateFakeData(query: any): { dimensions: string[]; source: (string | number | null)[][] } {
-  const columns: Array<{ completeName: string; measureFunction: number }> =
-    query?.columns ?? [];
+  const categoryDims: Array<{ completeName: string }> = query?.categoryDimensions ?? [];
+  const seriesDims: Array<{ completeName: string }> = query?.seriesDimensions ?? [];
+  const measures: Array<{ completeName: string; measureFunction: number }> = query?.measures ?? [];
 
-  const dimensions = columns.map((col) => col.completeName);
+  const allFields = [
+    ...categoryDims.map((d) => ({ completeName: d.completeName, measureFunction: 0 })),
+    ...seriesDims.map((d) => ({ completeName: d.completeName, measureFunction: 0 })),
+    ...measures,
+  ];
+
+  const dimensions = allFields.map((f) => f.completeName);
 
   const source = Array.from({ length: 10 }, () => {
-    return columns.map((col): string | number | null => {
-      const name = (col.completeName ?? "").toLowerCase();
-      const isNumericAggregation = col.measureFunction !== 0;
+    return allFields.map((field): string | number | null => {
+      const name = (field.completeName ?? "").toLowerCase();
+      const isNumericAggregation = field.measureFunction !== 0;
 
       if (isNumericAggregation) {
         return faker.number.float({ min: 100, max: 100_000, fractionDigits: 2 });

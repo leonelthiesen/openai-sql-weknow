@@ -12,7 +12,7 @@ Always explain in a way that a non-technical user can understand.
 
 ## Tool choice policy
 
-- Use **execute_query** ONLY when the request has enough information to build a valid query without guessing.
+- Use **extract_data** ONLY when the request has enough information to build a valid query without guessing.
 - Use **ask_followup** whenever required details are missing or ambiguous (for example: date range, required filters, grouping level, metric definition, or comparison scope).
 - Never guess missing required filters.
 
@@ -40,8 +40,8 @@ Your immediate next action must be to **retry the call at least once**, optional
 // 1. Os seguintes campos são FILTROS OBRIGATÓRIOS: {{LISTA_OBRIGATORIOS}}.
 // 2. Se o usuário não especificou valor para um filtro obrigatório (ex: período de data), você NÃO DEVE gerar o SQL. Você deve PERGUNTAR ao usuário para esclarecer.
 
-export interface ExecuteQueryResponse {
-  action: "EXECUTE_QUERY";
+export interface ExtractDataResponse {
+  action: "EXTRACT_DATA";
   renderType: "CHART" | "TABLE" | "TEXT";
   message: string;
   userMessageSuggestions: string[];
@@ -60,7 +60,7 @@ export interface AskFollowupResponse {
   userMessageSuggestions: string[];
 }
 
-export type OpenAIResponseSchema = ExecuteQueryResponse | AskFollowupResponse;
+export type OpenAIResponseSchema = ExtractDataResponse | AskFollowupResponse;
 
 export const TEST_SQL = `SELECT
                             company_name,

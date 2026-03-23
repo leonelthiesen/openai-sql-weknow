@@ -1,8 +1,8 @@
 import type OpenAI from "openai";
 import {
-    getExecuteQueryToolDefinition,
+    getExtractDataToolDefinition,
     getAskFollowupToolDefinition,
-    getRenderChartToolDefinition,
+    getDefineChartToolDefinition,
 } from "./tool-definitions";
 
 type FunctionTool = OpenAI.Responses.FunctionTool;
@@ -15,9 +15,9 @@ interface ToolRegistration {
 }
 
 const registry: ToolRegistration[] = [
-    { definition: getExecuteQueryToolDefinition(), phase: "primary" },
+    { definition: getExtractDataToolDefinition(), phase: "primary" },
     { definition: getAskFollowupToolDefinition(), phase: "primary" },
-    { definition: getRenderChartToolDefinition(), phase: "secondary" },
+    { definition: getDefineChartToolDefinition(), phase: "secondary" },
 ];
 
 export function getToolsForPhase(phase: ToolPhase): FunctionTool[] {

@@ -1,27 +1,28 @@
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import type { OpenAiItem } from "../chat.service";
 import { callOpenAI, extractFunctionCalls } from "../openai-call";
-import { getRenderChartToolDefinition } from "../../models/tool-definitions";
+import { getDefineChartToolDefinition } from "../../models/tool-definitions";
 import { parseToolArgs } from "../../utils/tool-args-parser";
-import type { RenderChartArgs } from "../../types/tool-args.types";
+import type { DefineChartArgs } from "../../types/tool-args.types";
+import type { SimplifiedChartDefinition } from "../../models/llm-structured-output.models";
 import { logger } from "../../utils/logger";
 
-export interface RenderChartResult {
-    chartConfig?: object;
+export interface DefineChartResult {
+    chartDefinition?: SimplifiedChartDefinition;
     openAiItems: OpenAiItem[];
 }
 
-export async function handleRenderChart(
+export async function handleDefineChart(
     baseInput: ResponseInputItem[],
     lastResponseOutput: unknown[],
-    executeQueryCallOutput: OpenAiItem
-): Promise<RenderChartResult> {
+    extractDataCallOutput: OpenAiItem
+): Promise<DefineChartResult> {
     const startTime = Date.now();
     const openAiItems: OpenAiItem[] = [];
 
     const developerContent = [
-        "The execute_query tool was called and sample query results are provided.",
-        "Use this information to render an appropriate chart.",
+        "The extract_data tool was called and sample query results are provided.",
+        "Use this information to define an appropriate chart configuration.",
     ].join("\n");
 
     openAiItems.push({
@@ -34,9 +35,9 @@ export async function handleRenderChart(
         ...baseInput,
         ...(lastResponseOutput as unknown as ResponseInputItem[]),
         {
-            type: executeQueryCallOutput.type,
-            call_id: executeQueryCallOutput.callId || "",
-            output: executeQueryCallOutput.output || "",
+            type: extractDataCallOutput.type,
+            call_id: extractDataCallOutput.callId || "",
+            output: extractDataCallOutput.output || "",
         } as ResponseInputItem,
         {
             role: "developer",
@@ -44,16 +45,16 @@ export async function handleRenderChart(
         } as ResponseInputItem,
     ];
 
-    const { response } = await callOpenAI(secondCallInput, [getRenderChartToolDefinition()]);
+    const { response } = await callOpenAI(secondCallInput, [getDefineChartToolDefinition()]);
     const chartCalls = extractFunctionCalls(response);
 
     if (chartCalls.length === 0) {
-        logger.warn("render_chart", "No function_call in chart response output");
+        logger.warn("define_chart", "No function_call in chart response output");
         return { openAiItems };
     }
 
     const chartCall = chartCalls[0]!;
-    const chartArgs = parseToolArgs("render_chart_config", chartCall.arguments) as RenderChartArgs;
+    const chartArgs = parseToolArgs("define_chart", chartCall.arguments) as DefineChartArgs;
 
     openAiItems.push({
         type: "function_call",
@@ -67,10 +68,10 @@ export async function handleRenderChart(
         output: "OK",
     });
 
-    logger.toolResult("render_chart_config", {
+    logger.toolResult("define_chart", {
         success: true,
         durationMs: Date.now() - startTime,
     });
 
-    return { chartConfig: chartArgs.chartConfig, openAiItems };
+    return { chartDefinition: chartArgs.chartDefinition, openAiItems };
 }

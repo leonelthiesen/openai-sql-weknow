@@ -1,16 +1,24 @@
-import type { ExecuteQueryArgs } from "../../types/tool-args.types";
+import type { ExtractDataArgs } from "../../types/tool-args.types";
 import type { ToolExecutionResult } from "../../types/tool-result.types";
 import type { ExecutionData } from "../chat.service";
 import { transformLLMToComponentExecuteInput } from "../../utils/llm-to-weknow-component-execute";
 import * as weknowService from "../weknow.service";
 import { logger } from "../../utils/logger";
 
+/**
+ * Transforma o resultado da API pivot table em ExecutionData.
+ * Formato da resposta:
+ * - cols[]: { completeName, section } onde section 15=medida, 16=série, 17=categoria
+ * - rows[]: { d1, d2, d3, ... } valores posicionais por coluna
+ */
 function transformExecuteResult(data: any): ExecutionData {
     let dimensions: string[] = [];
     let source: (string | number | null)[][] = [];
     if (data && data.cols && data.rows) {
-        dimensions = data.cols.map((col: any) => col.completeName);
-        source = data.rows.map((row: any) => row.cells.map((cell: any) => cell.value));
+        dimensions = data.cols.map((col: any) => col.completeName || col.header?.caption || "unknown");
+        source = data.rows.map((row: any) =>
+            data.cols.map((_: any, i: number) => row[`d${i + 1}`] ?? null)
+        );
     }
     return { dimensions, source };
 }
@@ -28,14 +36,14 @@ function isRetriable(errorMessage: string): boolean {
     return !NON_RETRIABLE_PATTERNS.some((pattern) => pattern.test(errorMessage));
 }
 
-export async function handleExecuteQuery(
-    args: ExecuteQueryArgs,
+export async function handleExtractData(
+    args: ExtractDataArgs,
     metadataId: number
 ): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
     const structuredOutput = {
-        action: "EXECUTE_QUERY" as const,
+        action: "EXTRACT_DATA" as const,
         message: args.message,
         renderType: args.renderType,
         query: args.query,
@@ -56,10 +64,10 @@ export async function handleExecuteQuery(
     try {
         const accessToken = await weknowService.getAccessToken();
         executeInput.accessToken = accessToken;
-        const executeResult = await weknowService.executeComponent(JSON.stringify(executeInput));
+        const executeResult = await weknowService.executePivotGridComponent(JSON.stringify(executeInput));
         const executionData = transformExecuteResult(executeResult);
 
-        logger.toolResult("execute_query", {
+        logger.toolResult("extract_data", {
             success: true,
             durationMs: Date.now() - startTime,
             rowCount: executionData.source.length,
@@ -67,9 +75,10 @@ export async function handleExecuteQuery(
 
         return { success: true, data: executionData };
     } catch (error: any) {
+        console.error("Error in handleExtractData:", JSON.stringify(error));
         const errorMessage = error?.message || error?.toString?.() || JSON.stringify(error);
 
-        logger.toolResult("execute_query", {
+        logger.toolResult("extract_data", {
             success: false,
             durationMs: Date.now() - startTime,
             error: errorMessage,

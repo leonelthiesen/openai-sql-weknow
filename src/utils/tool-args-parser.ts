@@ -1,4 +1,4 @@
-import type { ParsedToolArgs, ExecuteQueryArgs, AskFollowupArgs, RenderChartArgs } from "../types/tool-args.types";
+import type { ParsedToolArgs, ExtractDataArgs, AskFollowupArgs, DefineChartArgs } from "../types/tool-args.types";
 
 export class ToolValidationError extends Error {
     constructor(
@@ -19,33 +19,33 @@ export function parseToolArgs(name: string, rawArguments: string): ParsedToolArg
     }
 
     switch (name) {
-        case "execute_query":
-            return parseExecuteQueryArgs(parsed);
+        case "extract_data":
+            return parseExtractDataArgs(parsed);
         case "ask_followup":
             return parseAskFollowupArgs(parsed);
-        case "render_chart_config":
-            return parseRenderChartArgs(parsed);
+        case "define_chart":
+            return parseDefineChartArgs(parsed);
         default:
             throw new ToolValidationError(name, `Unknown tool: ${name}`);
     }
 }
 
-function parseExecuteQueryArgs(parsed: any): ExecuteQueryArgs {
+function parseExtractDataArgs(parsed: any): ExtractDataArgs {
     if (!parsed.message || typeof parsed.message !== "string") {
-        throw new ToolValidationError("execute_query", "Missing or invalid 'message'");
+        throw new ToolValidationError("extract_data", "Missing or invalid 'message'");
     }
     if (!parsed.renderType || !["CHART", "TABLE", "TEXT"].includes(parsed.renderType)) {
-        throw new ToolValidationError("execute_query", `Invalid renderType: ${parsed.renderType}`);
+        throw new ToolValidationError("extract_data", `Invalid renderType: ${parsed.renderType}`);
     }
     if (!parsed.query || typeof parsed.query !== "object") {
-        throw new ToolValidationError("execute_query", "Missing 'query' object");
+        throw new ToolValidationError("extract_data", "Missing 'query' object");
     }
-    if (!Array.isArray(parsed.query.columns) || parsed.query.columns.length === 0) {
-        throw new ToolValidationError("execute_query", "query.columns must be a non-empty array");
+    if (!Array.isArray(parsed.query.measures) || parsed.query.measures.length === 0) {
+        throw new ToolValidationError("extract_data", "query.measures must be a non-empty array");
     }
 
     return {
-        toolName: "execute_query",
+        toolName: "extract_data",
         message: parsed.message,
         userMessageSuggestions: parsed.userMessageSuggestions ?? [],
         renderType: parsed.renderType,
@@ -65,13 +65,19 @@ function parseAskFollowupArgs(parsed: any): AskFollowupArgs {
     };
 }
 
-function parseRenderChartArgs(parsed: any): RenderChartArgs {
-    if (!parsed.chartConfig || typeof parsed.chartConfig !== "object") {
-        throw new ToolValidationError("render_chart_config", "Missing or invalid 'chartConfig'");
+function parseDefineChartArgs(parsed: any): DefineChartArgs {
+    if (!parsed.chartType || typeof parsed.chartType !== "string") {
+        throw new ToolValidationError("define_chart", "Missing or invalid 'chartType'");
+    }
+    if (!parsed.categoryField || typeof parsed.categoryField !== "string") {
+        throw new ToolValidationError("define_chart", "Missing or invalid 'categoryField'");
+    }
+    if (!Array.isArray(parsed.series) || parsed.series.length === 0) {
+        throw new ToolValidationError("define_chart", "series must be a non-empty array");
     }
 
     return {
-        toolName: "render_chart_config",
-        chartConfig: parsed.chartConfig,
+        toolName: "define_chart",
+        chartDefinition: parsed,
     };
 }

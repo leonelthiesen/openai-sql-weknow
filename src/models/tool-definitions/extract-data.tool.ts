@@ -1,46 +1,17 @@
 import type OpenAI from "openai";
+import { description } from "./description-helper";
 
 type FunctionTool = OpenAI.Responses.FunctionTool;
 
-function description(...lines: string[]): string {
-  return lines.join(" ");
-}
-
-export function getDefineOutputFormatToolDefinition(): FunctionTool {
+export function getExtractDataToolDefinition(): FunctionTool {
   return {
     type: "function",
-    name: "define_output_format",
+    name: "extract_data",
     description: description(
-      "Define the output format for the final answer to the user.",
-      "Use this tool at the beginning of the conversation when the user has a specific format requirement for the answer (for example, a JSON structure, a specific chart type, or a particular textual layout).",
-      "If the user does not have specific format requirements, do not call this tool and provide the answer in a clear and readable format using Markdown.",
-    ),
-    parameters: {
-        renderType: {
-          type: "string",
-          description: description(
-            "Determines the type of the output format the user wants.",
-            "Choose using this policy: CHART when the user explicitly asks for a chart/graph or when visual comparison is the clearest answer;",
-            "TABLE when row-level detail, listing, or comparisons across many records are needed;",
-            "TEXT ONLY when the result is a single scalar summary (for example, one KPI value).",
-            "If unclear, default to TABLE."
-          ),
-          enum: ["CHART", "TABLE", "TEXT"],
-        },
-    },
-    strict: false,
-  };
-}
-
-export function getExecuteQueryToolDefinition(): FunctionTool {
-  return {
-    type: "function",
-    name: "execute_query",
-    description: description(
-      "Execute a data query ONLY when the request is sufficiently specified.",
-      "Call this tool only if you can identify dimensions/measures, required filters, and aggregation intent without guessing.",
+      "Extract and render data when the request is sufficiently specified.",
+      "The result is rendered as a chart with spreadsheet, a standalone spreadsheet, or a text summary depending on renderType.",
+      "Call this tool only if you can identify dimensions, measures, required filters, and aggregation intent without guessing.",
       "If any required detail is missing or ambiguous, call ask_followup instead.",
-      "The query will be executed by the system and the result will be rendered to the user.",
     ),
     parameters: {
       type: "object",
@@ -50,7 +21,7 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
           description: description(
             "Message contextualizing the response in PORTUGUESE.",
             "Use Markdown.",
-            "The query result data will be rendered separately right after this message.",
+            "The data will be rendered separately right after this message.",
             "Keep suggestions in userMessageSuggestions aligned with the message.",
           ),
         },
@@ -75,75 +46,18 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
         query: {
           type: "object",
           description: description(
-            "Query definitions: columns, sorting, calculated fields, pre-aggregation filters (WHERE), and post-aggregation filters (HAVING).",
+            "Query definitions: calculated fields, series dimensions, category dimensions, measures, sorting, pre-aggregation filters (WHERE), and post-aggregation filters (HAVING).",
             "This query will not be shown to the user.",
-            "The query result data/visualization will be shown to the user separately right after your message.",
-            "When using recsMax for top/limit behavior, include a deterministic sort to avoid unstable results."
+            "The data will be rendered separately right after your message.",
+            "When using recsMax for top/limit behavior, include a deterministic categorySort to avoid unstable results."
           ),
           properties: {
-            columns: {
-              type: "array",
-              minItems: 1,
-              description: "List of output column definitions. Include all fields needed to answer the request.",
-              items: {
-                type: "object",
-                properties: {
-                  completeName: {
-                    type: "string",
-                    description: description(
-                      "Use only the 'completeName' from the provided fields or 'completeName' of calculated fields.",
-                    ),
-                  },
-                  measureFunction: {
-                     description: "When referencing a calculated field with hasAggregateFunction=true, set measureFunction to 0 (fnNone).",
-                    $ref: "#/$defs/TMeasureFunction"
-                  },
-                  title: {
-                    type: "string",
-                    description: "Friendly column title in PORTUGUESE for display purposes.",
-                  },
-                },
-                required: ["completeName", "measureFunction", "title"],
-                additionalProperties: false,
-              },
-            },
-            sort: {
-              type: "array",
-              description: description(
-                "List of sorting definitions.",
-                "Use sort whenever the user asks for top/limit/ranking or when deterministic ordering matters."
-              ),
-              items: {
-                type: "object",
-                properties: {
-                  completeName: {
-                    type: "string",
-                    description: description(
-                      "Use the 'completeName' from the provided fields or calculated fields.",
-                      "When referencing a calculated field with hasAggregateFunction=true, set measureFunction to 0 (fnNone)."
-                    ),
-                  },
-                  direction: {
-                    type: "number",
-                    description: "Enum for sort direction",
-                    enum: [0, 1],
-                    oneOf: [
-                      { const: 0, title: "sdAsc", description: "Ascending" },
-                      { const: 1, title: "sdDesc", description: "Descending" }
-                    ],
-                  },
-                  measureFunction: { $ref: "#/$defs/TMeasureFunction" },
-                },
-                required: ["completeName", "direction", "measureFunction"],
-                additionalProperties: false,
-              },
-            },
             calculatedFields: {
               type: "array",
               description: description(
                 "List of calculated fields (ANSI SQL expressions) that can be defined and used in",
-                "columns, sorting, filters, and post-aggregation (having) filters.",
-                "A calculated field is effective only when referenced by its 'completeName' in columns, sort, filters, or havingFilters.",
+                "seriesDimensions, categoryDimensions, measures, sorting, filters, and havingFilters.",
+                "A calculated field is effective only when referenced by its 'completeName' in those properties.",
                 "Use calculated fields when direct fields from the virtual table are not sufficient.",
                 "If a referenced calculated field has hasAggregateFunction=true, always set the reference measureFunction to 0 (fnNone).",
                 "Set hasAggregateFunction explicitly to avoid misinterpretation."
@@ -188,6 +102,130 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
                 additionalProperties: false,
               },
             },
+            seriesDimensions: {
+              type: "array",
+              description: description(
+                "Dimensions that create separate series in charts or column headers in pivot tables.",
+                "In a CHART, each unique value in these fields generates a separate series (e.g., one bar group or one line per value).",
+                "In a TABLE, these become column-level groupings (pivot columns).",
+                "Optional — omit when no cross-tabulation or multi-series breakdown is needed.",
+              ),
+              items: {
+                type: "object",
+                properties: {
+                  completeName: {
+                    type: "string",
+                    description: description(
+                      "Use only the 'completeName' from the provided fields or 'completeName' of calculated fields.",
+                    ),
+                  },
+                  title: {
+                    type: "string",
+                    description: "Friendly title in PORTUGUESE for display purposes.",
+                  },
+                },
+                required: ["completeName", "title"],
+                additionalProperties: false,
+              },
+            },
+            seriesSort: {
+              type: "array",
+              description: description(
+                "Sorting applied to seriesDimensions.",
+                "Use when the user requests a specific order for the series/columns.",
+              ),
+              items: {
+                type: "object",
+                properties: {
+                  completeName: {
+                    type: "string",
+                    description: "completeName of a seriesDimension or measure field.",
+                  },
+                  direction: { $ref: "#/$defs/TSortDirection" },
+                  measureFunction: { $ref: "#/$defs/TMeasureFunction" },
+                },
+                required: ["completeName", "direction", "measureFunction"],
+                additionalProperties: false,
+              },
+            },
+            categoryDimensions: {
+              type: "array",
+              minItems: 1,
+              description: description(
+                "Dimensions that define the categories (labels) on the X axis in charts or row headers in pivot tables.",
+                "In a CHART, these values appear as tick labels along the category axis.",
+                "In a TABLE, these become row-level groupings.",
+                "At least one categoryDimension or seriesDimension should be provided alongside measures.",
+              ),
+              items: {
+                type: "object",
+                properties: {
+                  completeName: {
+                    type: "string",
+                    description: description(
+                      "Use only the 'completeName' from the provided fields or 'completeName' of calculated fields.",
+                    ),
+                  },
+                  title: {
+                    type: "string",
+                    description: "Friendly title in PORTUGUESE for display purposes.",
+                  },
+                },
+                required: ["completeName", "title"],
+                additionalProperties: false,
+              },
+            },
+            categorySort: {
+              type: "array",
+              description: description(
+                "Sorting applied to categoryDimensions.",
+                "Use when the user requests a specific order for categories/rows, or for top-N with deterministic results.",
+              ),
+              items: {
+                type: "object",
+                properties: {
+                  completeName: {
+                    type: "string",
+                    description: "completeName of a categoryDimension or measure field.",
+                  },
+                  direction: { $ref: "#/$defs/TSortDirection" },
+                  measureFunction: { $ref: "#/$defs/TMeasureFunction" },
+                },
+                required: ["completeName", "direction", "measureFunction"],
+                additionalProperties: false,
+              },
+            },
+            measures: {
+              type: "array",
+              minItems: 1,
+              description: description(
+                "Numeric values to aggregate and display.",
+                "In a CHART, each measure becomes a plotted series (bar, line, area). When combined with seriesDimensions, total series = unique seriesDimension values x number of measures.",
+                "In a TABLE, measures become the aggregated value cells in the pivot.",
+                "In TEXT mode, typically a single measure produces a scalar KPI value.",
+              ),
+              items: {
+                type: "object",
+                properties: {
+                  completeName: {
+                    type: "string",
+                    description: description(
+                      "Use only the 'completeName' from the provided fields or 'completeName' of calculated fields.",
+                    ),
+                  },
+                  measureFunction: {
+                     description: "When referencing a calculated field with hasAggregateFunction=true, set measureFunction to 0 (fnNone).",
+                    $ref: "#/$defs/TMeasureFunction"
+                  },
+                  title: {
+                    type: "string",
+                    description: "Friendly title in PORTUGUESE for display purposes.",
+                  },
+                },
+                required: ["completeName", "measureFunction", "title"],
+                additionalProperties: false,
+              },
+            },
             filters: { $ref: "#/$defs/TWhereFilters" },
             havingFilters: { $ref: "#/$defs/THavingFilters" },
             recsMax: {
@@ -195,11 +233,11 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
               description: description(
                 "Maximum number of records to return.",
                 "Use this when the user requests a limit/top N.",
-                "When recsMax is used, also provide sort criteria so the top/limit is deterministic.",
+                "When recsMax is used, also provide categorySort so the top/limit is deterministic.",
               )
             },
           },
-          required: ["columns"],
+          required: ["measures"],
           additionalProperties: false,
         },
       },
@@ -225,6 +263,16 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
             { const: 8, title: "fnDistinctList", description: "Distinct list function" },
             { const: 9, title: "fnDistinctSum", description: "Distinct sum function" },
             { const: 10, title: "fnDistinctAverage", description: "Distinct average function" },
+          ],
+        },
+        TSortDirection: {
+          type: "number",
+          description: "Enum for sort direction",
+          enum: [0, 1, 2],
+          oneOf: [
+            { const: 0, title: "sdAsc", description: "Ascending order" },
+            { const: 1, title: "sdDesc", description: "Descending order" },
+            { const: 2, title: "sdNone", description: "No sorting" },
           ],
         },
         TBooleanOperator: {
@@ -366,131 +414,5 @@ export function getExecuteQueryToolDefinition(): FunctionTool {
       },
     },
     strict: false,
-  };
-}
-
-
-export function getExecuteChartToolDefinition(): FunctionTool {
-  return {
-    type: "function",
-    name: "execute_chart",
-    description: description(
-      "Execute a data query ONLY when the request is sufficiently specified.",
-      "Call this tool only if you can identify dimensions/measures, required filters, and aggregation intent without guessing.",
-      "If any required detail is missing or ambiguous, call ask_followup instead.",
-      "The query will be executed by the system and the result will be rendered to the user.",
-    ),
-    parameters: {
-    },
-    strict: false,
-  };
-}
-
-export function getRenderChartToolDefinition(): FunctionTool {
-  return {
-    type: "function",
-    name: "render_chart_config",
-    description: description(
-      "Render an Apache ECharts chart configuration to visualize query result data.",
-      "Call this tool only after execute_query has returned data in the conversation context.",
-      "Use the provided result columns and values to build a coherent and readable chart.",
-    ),
-    parameters: {
-      type: "object",
-      properties: {
-        chartConfig: {
-          type: "object",
-          description: description(
-            "Apache ECharts configuration object.",
-            "Must include 'dataset' with 'dimensions' and 'source' mapped from the query result.",
-            "Use friendly Portuguese titles/legends (e.g., 'DATA_EMISSAO' → 'Data de Emissão').",
-            "Position legends below or beside the chart.",
-            "Chart title must have padding so it does not stick to the chart (e.g., padding: [10, 0, 30, 0]).",
-            "Axis titles should be centered and vertical where applicable.",
-            "Prefer readable defaults over excessive styling.",
-          ),
-          properties: {
-            title: {
-              type: "object",
-              additionalProperties: true
-            },
-            dataset: {
-              type: "object",
-              additionalProperties: true
-            },
-            xAxis: {
-              type: "object",
-              additionalProperties: true
-            },
-            yAxis: {
-              type: "object",
-              additionalProperties: true
-            },
-            series: {
-              type: "array",
-              items: {
-                type: "object",
-                additionalProperties: true
-              }
-            },
-            legend: {
-              type: "object",
-              additionalProperties: true
-            },
-            tooltip: {
-              type: "object",
-              additionalProperties: true
-            },
-            grid: {
-              type: "object",
-              additionalProperties: true
-            },
-          },
-          required: ["dataset", "series"],
-          additionalProperties: true,
-        },
-      },
-      required: ["chartConfig"],
-      additionalProperties: false,
-    },
-    strict: false,
-  };
-}
-
-export function getAskFollowupToolDefinition(): FunctionTool {
-  return {
-    type: "function",
-    name: "ask_followup",
-    description: description(
-      "Ask the user for clarification when the request is ambiguous or missing required details.",
-      "Use this tool when required filters, date ranges, grouping level, or metric intent are missing.",
-      "Call this instead of guessing or silently assuming defaults that change query meaning.",
-      "Ask one focused clarification at a time and provide actionable suggestion options.",
-    ),
-    parameters: {
-      type: "object",
-      properties: {
-        message: {
-          type: "string",
-          description: description(
-            "Message in PORTUGUESE explaining exactly which information is missing.",
-            "Provide short examples the user can copy or adapt.",
-            "Keep suggestions in userMessageSuggestions aligned with the message and focused on unblocking execution.",
-            "Use Markdown.",
-          ),
-        },
-        userMessageSuggestions: {
-          type: "array",
-          description: description(
-            "List of concrete follow-up suggestions in PORTUGUESE that unblock execution.",
-            "Keep suggestions short, specific, and directly actionable.",
-          ),
-          items: { type: "string" },
-        },
-      },
-      required: ["message", "userMessageSuggestions"],
-      additionalProperties: false,
-    },
-    strict: true,
   };
 }

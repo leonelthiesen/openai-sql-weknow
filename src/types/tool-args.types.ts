@@ -1,9 +1,10 @@
 import type { LLMQuery } from "../models/llm-structured-output.models";
+import type { SimplifiedChartDefinition } from "../models/llm-structured-output.models";
 
 // ── Discriminated union for parsed tool arguments ────────────────────────────
 
-export interface ExecuteQueryArgs {
-    toolName: "execute_query";
+export interface ExtractDataArgs {
+    toolName: "extract_data";
     message: string;
     userMessageSuggestions: string[];
     renderType: "CHART" | "TABLE" | "TEXT";
@@ -16,9 +17,9 @@ export interface AskFollowupArgs {
     userMessageSuggestions: string[];
 }
 
-export interface RenderChartArgs {
-    toolName: "render_chart_config";
-    chartConfig: object;
+export interface DefineChartArgs {
+    toolName: "define_chart";
+    chartDefinition: SimplifiedChartDefinition;
 }
 
-export type ParsedToolArgs = ExecuteQueryArgs | AskFollowupArgs | RenderChartArgs;
+export type ParsedToolArgs = ExtractDataArgs | AskFollowupArgs | DefineChartArgs;

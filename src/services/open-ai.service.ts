@@ -1,18 +1,19 @@
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import {
-    getExecuteQueryToolDefinition,
+    getExtractDataToolDefinition,
     getAskFollowupToolDefinition,
 } from "../models/tool-definitions";
 import { generateFakeData } from "../utils/fake-data";
 import type { ExecutionData, OpenAiItem } from "./chat.service";
 import type { OpenAIResponseSchema } from "../constants";
 import { parseToolArgs } from "../utils/tool-args-parser";
-import type { ExecuteQueryArgs } from "../types/tool-args.types";
+import type { ExtractDataArgs } from "../types/tool-args.types";
 import { callOpenAI } from "./openai-call";
 import { handleAskFollowup } from "./tool-handlers/ask-followup.handler";
-import { handleExecuteQuery } from "./tool-handlers/execute-query.handler";
-import { handleRenderChart } from "./tool-handlers/render-chart.handler";
+import { handleExtractData } from "./tool-handlers/extract-data.handler";
+import { handleDefineChart } from "./tool-handlers/define-chart.handler";
 import { logger } from "../utils/logger";
+import { transformChartDefinitionToECharts } from "../utils/chart-definition-to-echarts";
 
 const MAX_RETRY_ATTEMPTS = 3;
 
@@ -29,8 +30,8 @@ export async function createModelResponse(
 ): Promise<ToolCallResult> {
     const openAiItems: OpenAiItem[] = [];
 
-    // ── First call: execute_query or ask_followup ────────────────────────────
-    const primaryTools = [getExecuteQueryToolDefinition(), getAskFollowupToolDefinition()];
+    // ── First call: extract_data or ask_followup ─────────────────────────────
+    const primaryTools = [getExtractDataToolDefinition(), getAskFollowupToolDefinition()];
     const { response: firstResponse, functionCalls: firstCalls, reasoningItems } =
         await callOpenAI(input, primaryTools);
 
@@ -65,22 +66,21 @@ export async function createModelResponse(
         return { structuredOutput: result.structuredOutput, openAiItems };
     }
 
-    // ── execute_query: execute with retry loop ───────────────────────────────
-    // After ask_followup early return, primaryArgs is narrowed to ExecuteQueryArgs
-    if (primaryArgs.toolName !== "execute_query") {
+    // ── extract_data: execute with retry loop ────────────────────────────────
+    if (primaryArgs.toolName !== "extract_data") {
         throw new Error(`Unexpected tool: ${primaryArgs.toolName}`);
     }
 
     let executionData: ExecutionData | undefined;
     let errorResponse: string | Object | undefined;
     let currentCall = primaryCall;
-    let currentArgs: ExecuteQueryArgs = primaryArgs;
+    let currentArgs: ExtractDataArgs = primaryArgs;
     let lastResponse = firstResponse;
 
     for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-        logger.tool("execute_query", { attempt, metadataId });
+        logger.tool("extract_data", { attempt, metadataId });
 
-        const result = await handleExecuteQuery(currentArgs, metadataId);
+        const result = await handleExtractData(currentArgs, metadataId);
 
         if (result.success) {
             executionData = result.data;
@@ -127,8 +127,8 @@ export async function createModelResponse(
             openAiItems.push({ type: "reasoning", reasoningItem: item });
         }
 
-        if (retryCalls.length === 0 || retryCalls[0]!.name !== "execute_query") {
-            logger.error("openai", `Retry ${attempt}: model did not return execute_query`);
+        if (retryCalls.length === 0 || retryCalls[0]!.name !== "extract_data") {
+            logger.error("openai", `Retry ${attempt}: model did not return extract_data`);
 
             // If model switched to ask_followup, treat as final answer
             if (retryCalls.length > 0 && retryCalls[0]!.name === "ask_followup") {
@@ -156,7 +156,7 @@ export async function createModelResponse(
         }
 
         currentCall = retryCalls[0]!;
-        currentArgs = parseToolArgs("execute_query", currentCall.arguments) as ExecuteQueryArgs;
+        currentArgs = parseToolArgs("extract_data", currentCall.arguments) as ExtractDataArgs;
         lastResponse = retryResponse;
 
         openAiItems.push({
@@ -174,34 +174,36 @@ export async function createModelResponse(
         ? { dimensions: executionData.dimensions, source: executionData.source.slice(0, 20) }
         : generateFakeData(currentArgs.query);
 
-    const executeQueryOutput = executionData
+    const extractDataOutput = executionData
         ? "Query executed successfully. Result (first rows): " + JSON.stringify(dataForLLM)
         : "Query executed successfully. Result using fabricated data: " + JSON.stringify(dataForLLM);
 
-    const executeQueryFunctionCallOutput: OpenAiItem = {
+    const extractDataFunctionCallOutput: OpenAiItem = {
         type: "function_call_output",
         callId: currentCall.call_id,
-        output: executeQueryOutput,
+        output: extractDataOutput,
     };
-    openAiItems.push(executeQueryFunctionCallOutput);
+    openAiItems.push(extractDataFunctionCallOutput);
 
-    // ── CHART: second call for render_chart_config ───────────────────────────
+    // ── CHART: second call for define_chart ───────────────────────────────────
+    let chartDefinition: object | undefined;
     let chartConfig: object | undefined;
 
     if (currentArgs.renderType === "CHART") {
-        const chartResult = await handleRenderChart(
+        const chartResult = await handleDefineChart(
             input,
             lastResponse.output,
-            executeQueryFunctionCallOutput
+            extractDataFunctionCallOutput
         );
         openAiItems.push(...chartResult.openAiItems);
-        chartConfig = chartResult.chartConfig;
+        chartDefinition = chartResult.chartDefinition;
+        chartConfig = transformChartDefinitionToECharts(chartDefinition as any, executionData as any); // Validate chart definition against execution data
     }
 
     // ── Return final result ──────────────────────────────────────────────────
     return {
         structuredOutput: {
-            action: "EXECUTE_QUERY",
+            action: "EXTRACT_DATA",
             message: currentArgs.message,
             userMessageSuggestions: currentArgs.userMessageSuggestions,
             renderType: currentArgs.renderType,
