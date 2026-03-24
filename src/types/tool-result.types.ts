@@ -1,8 +1,8 @@
-import type { ExecutionData } from "../services/chat.service";
+import { PivotGridResponse } from "./pivot-grid-response.types";
 
 export interface ToolExecutionSuccess {
     success: true;
-    data: ExecutionData;
+    data: PivotGridResponse;
 }
 
 export interface ToolExecutionError {

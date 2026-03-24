@@ -1,5 +1,6 @@
 import { MetadataField, MODEL_INSTRUCTIONS, OpenAIResponseSchema } from "../constants";
 import type { ResponseOutputItem } from "openai/resources/responses/responses";
+import { PivotGridResponse } from "../types/pivot-grid-response.types";
 
 export interface ExecutionData {
   dimensions: string[];
@@ -32,7 +33,7 @@ export interface AppMessage {
   // Dados para exibição no frontend
   content?: string;
   parsedContent?: OpenAIResponseSchema;
-  executionData?: ExecutionData;
+  executionData?: PivotGridResponse;
   errorResponse?: string | Object;
 
   // Mensagens internas trocadas com a OpenAI

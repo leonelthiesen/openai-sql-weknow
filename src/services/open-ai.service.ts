@@ -3,24 +3,24 @@ import {
     getExtractDataToolDefinition,
     getAskFollowupToolDefinition,
 } from "../models/tool-definitions";
-import { generateFakeData } from "../utils/fake-data";
-import type { ExecutionData, OpenAiItem } from "./chat.service";
+import type { OpenAiItem } from "./chat.service";
 import type { OpenAIResponseSchema } from "../constants";
 import { parseToolArgs } from "../utils/tool-args-parser";
 import type { ExtractDataArgs } from "../types/tool-args.types";
 import { callOpenAI } from "./openai-call";
 import { handleAskFollowup } from "./tool-handlers/ask-followup.handler";
 import { handleExtractData } from "./tool-handlers/extract-data.handler";
-import { handleDefineChart } from "./tool-handlers/define-chart.handler";
+import { handleRenderChart } from "./tool-handlers/render-chart.handler";
 import { logger } from "../utils/logger";
-import { transformChartDefinitionToECharts } from "../utils/chart-definition-to-echarts";
+import { buildDataSummary } from "../utils/obfuscate-pivot-data";
+import { PivotGridResponse } from "../types/pivot-grid-response.types";
 
 const MAX_RETRY_ATTEMPTS = 3;
 
 export interface ToolCallResult {
     structuredOutput: OpenAIResponseSchema;
     openAiItems: OpenAiItem[];
-    executionData?: ExecutionData;
+    executionData?: PivotGridResponse;
     errorResponse?: string | Object;
 }
 
@@ -71,7 +71,7 @@ export async function createModelResponse(
         throw new Error(`Unexpected tool: ${primaryArgs.toolName}`);
     }
 
-    let executionData: ExecutionData | undefined;
+    let executionData: PivotGridResponse | undefined;
     let errorResponse: string | Object | undefined;
     let currentCall = primaryCall;
     let currentArgs: ExtractDataArgs = primaryArgs;
@@ -170,34 +170,35 @@ export async function createModelResponse(
     }
 
     // ── Build execution output for LLM context ──────────────────────────────
-    const dataForLLM = executionData
-        ? { dimensions: executionData.dimensions, source: executionData.source.slice(0, 20) }
-        : generateFakeData(currentArgs.query);
+    let dataOutput: string;
+    if (executionData) {
+        dataOutput = buildDataSummary(executionData);
+    } else if (errorResponse) {
+        dataOutput = `Query execution failed: ${typeof errorResponse === "string" ? errorResponse : JSON.stringify(errorResponse)}`;
+    } else {
+        dataOutput = "Query executed but no data was returned.";
+    }
 
-    const extractDataOutput = executionData
-        ? "Query executed successfully. Result (first rows): " + JSON.stringify(dataForLLM)
-        : "Query executed successfully. Result using fabricated data: " + JSON.stringify(dataForLLM);
 
     const extractDataFunctionCallOutput: OpenAiItem = {
         type: "function_call_output",
         callId: currentCall.call_id,
-        output: extractDataOutput,
+        output: dataOutput,
     };
     openAiItems.push(extractDataFunctionCallOutput);
 
-    // ── CHART: second call for define_chart ───────────────────────────────────
-    let chartDefinition: object | undefined;
+    // ── CHART: second call for render_chart_config ─────────────────────────────
     let chartConfig: object | undefined;
 
     if (currentArgs.renderType === "CHART") {
-        const chartResult = await handleDefineChart(
+        const chartResult = await handleRenderChart(
             input,
             lastResponse.output,
-            extractDataFunctionCallOutput
+            extractDataFunctionCallOutput,
+            executionData
         );
         openAiItems.push(...chartResult.openAiItems);
-        chartDefinition = chartResult.chartDefinition;
-        chartConfig = transformChartDefinitionToECharts(chartDefinition as any, executionData as any); // Validate chart definition against execution data
+        chartConfig = chartResult.chartConfig;
     }
 
     // ── Return final result ──────────────────────────────────────────────────

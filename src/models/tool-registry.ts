@@ -2,7 +2,7 @@ import type OpenAI from "openai";
 import {
     getExtractDataToolDefinition,
     getAskFollowupToolDefinition,
-    getDefineChartToolDefinition,
+    getRenderChartToolDefinition,
 } from "./tool-definitions";
 
 type FunctionTool = OpenAI.Responses.FunctionTool;
@@ -17,7 +17,7 @@ interface ToolRegistration {
 const registry: ToolRegistration[] = [
     { definition: getExtractDataToolDefinition(), phase: "primary" },
     { definition: getAskFollowupToolDefinition(), phase: "primary" },
-    { definition: getDefineChartToolDefinition(), phase: "secondary" },
+    { definition: getRenderChartToolDefinition(), phase: "secondary" },
 ];
 
 export function getToolsForPhase(phase: ToolPhase): FunctionTool[] {

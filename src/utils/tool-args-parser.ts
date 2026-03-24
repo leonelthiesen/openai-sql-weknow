@@ -1,4 +1,4 @@
-import type { ParsedToolArgs, ExtractDataArgs, AskFollowupArgs, DefineChartArgs } from "../types/tool-args.types";
+import type { ParsedToolArgs, ExtractDataArgs, AskFollowupArgs, RenderChartArgs } from "../types/tool-args.types";
 
 export class ToolValidationError extends Error {
     constructor(
@@ -23,8 +23,9 @@ export function parseToolArgs(name: string, rawArguments: string): ParsedToolArg
             return parseExtractDataArgs(parsed);
         case "ask_followup":
             return parseAskFollowupArgs(parsed);
-        case "define_chart":
-            return parseDefineChartArgs(parsed);
+        case "render_chart_config":
+            parsed.chartConfig = typeof parsed.chartConfig === "string" ? JSON.parse(parsed.chartConfig) : parsed.chartConfig;
+            return parseRenderChartArgs(parsed);
         default:
             throw new ToolValidationError(name, `Unknown tool: ${name}`);
     }
@@ -65,19 +66,16 @@ function parseAskFollowupArgs(parsed: any): AskFollowupArgs {
     };
 }
 
-function parseDefineChartArgs(parsed: any): DefineChartArgs {
-    if (!parsed.chartType || typeof parsed.chartType !== "string") {
-        throw new ToolValidationError("define_chart", "Missing or invalid 'chartType'");
+function parseRenderChartArgs(parsed: any): RenderChartArgs {
+    if (!parsed.chartConfig || typeof parsed.chartConfig !== "object") {
+        throw new ToolValidationError("render_chart_config", "Missing or invalid 'chartConfig'");
     }
-    if (!parsed.categoryField || typeof parsed.categoryField !== "string") {
-        throw new ToolValidationError("define_chart", "Missing or invalid 'categoryField'");
-    }
-    if (!Array.isArray(parsed.series) || parsed.series.length === 0) {
-        throw new ToolValidationError("define_chart", "series must be a non-empty array");
+    if (!Array.isArray(parsed.chartConfig.series) || parsed.chartConfig.series.length === 0) {
+        throw new ToolValidationError("render_chart_config", "chartConfig.series must be a non-empty array");
     }
 
     return {
-        toolName: "define_chart",
-        chartDefinition: parsed,
+        toolName: "render_chart_config",
+        chartConfig: parsed.chartConfig,
     };
 }

@@ -1,4 +1,5 @@
 import fetch from "node-fetch";
+import type { PivotGridResponse } from "../types/pivot-grid-response.types";
 import { encryptWithPublicKey } from "../utils/utils";
 
 interface MetadataSummaryCache {
@@ -171,7 +172,7 @@ export async function executeComponent(
 
 export async function executePivotGridComponent(
   body: string,
-): Promise<ExecuteComponentResponse> {
+): Promise<PivotGridResponse> {
   const url = getUrl("TComponentApi/Execute");
 
   const response = await fetch(url, {
@@ -182,7 +183,7 @@ export async function executePivotGridComponent(
 
   await throwIfError(response, "executePivotGridComponent");
 
-  return response.json() as Promise<ExecuteComponentResponse>;
+  return response.json() as Promise<PivotGridResponse>;
 }
 
 export async function executeMetadata(metadataId: number, accessToken: string): Promise<any> {

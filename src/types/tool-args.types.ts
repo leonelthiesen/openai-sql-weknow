@@ -1,5 +1,4 @@
 import type { LLMQuery } from "../models/llm-structured-output.models";
-import type { SimplifiedChartDefinition } from "../models/llm-structured-output.models";
 
 // ── Discriminated union for parsed tool arguments ────────────────────────────
 
@@ -17,9 +16,9 @@ export interface AskFollowupArgs {
     userMessageSuggestions: string[];
 }
 
-export interface DefineChartArgs {
-    toolName: "define_chart";
-    chartDefinition: SimplifiedChartDefinition;
+export interface RenderChartArgs {
+    toolName: "render_chart_config";
+    chartConfig: object;
 }
 
-export type ParsedToolArgs = ExtractDataArgs | AskFollowupArgs | DefineChartArgs;
+export type ParsedToolArgs = ExtractDataArgs | AskFollowupArgs | RenderChartArgs;

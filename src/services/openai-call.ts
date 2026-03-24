@@ -4,11 +4,12 @@ import type { ResponseInputItem } from "openai/resources/responses/responses";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const MODEL = "gpt-5-mini-2025-08-07";
+// const MODEL = "gpt-5-mini-2025-08-07";
+const MODEL = "gpt-5.1-codex-mini";
 
 const SHARED_OPTIONS = {
     model: MODEL,
-    reasoning: { effort: "minimal" as const },
+    reasoning: { effort: "low" as const },
     include: ["reasoning.encrypted_content"] as OpenAI.Responses.ResponseIncludable[],
 };
 
