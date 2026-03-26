@@ -191,8 +191,9 @@ function buildObfuscatedCsv(
     const dataRows = rows.slice(0, maxRows).map((row) => {
         return cols
             .map((_, i) => {
-                const rawValue = row[`d${i}` as `d${number}`] ?? "";
-                const obfuscated = obfuscator.obfuscate(rawValue, i, columnTypes[i]!);
+                let dataIndex = i + 1; // Data fields are d1, d2, ...
+                const rawValue = row[`d${dataIndex}` as `d${number}`] ?? "";
+                const obfuscated = obfuscator.obfuscate(rawValue, dataIndex, columnTypes[dataIndex]!);
                 return csvEscape(obfuscated);
             })
             .join(",");
