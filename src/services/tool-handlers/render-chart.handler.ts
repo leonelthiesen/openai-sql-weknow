@@ -169,17 +169,19 @@ export function hydrateChartConfig(
 
 export function buildDeveloperMessage(executionData?: PivotGridResponse): string {
     const lines = [
-        "The extract_data tool was called and sample query results are provided.",
-        "Use this information and the user's request to render an appropriate chart configuration.",
+        "The extract_data tool was called and CSV sample data are provided.",
+        "Use this CSV data and the user's request to render an appropriate chart configuration.",
     ];
 
     if (executionData && executionData.cols.length > 0) {
-        const categoryCols = executionData.cols.filter((c) => c.section === CATEGORY_SECTION);
-        const measureCols = executionData.cols.filter((c) => c.section === MEASURE_SECTION);
+        const categoryCols = executionData.cols.filter((c) => c.section === CATEGORY_SECTION && c.visible);
+        const measureCols = executionData.cols.filter((c) => c.section === MEASURE_SECTION && c.visible);
 
         lines.push(
             "",
-            "CRITICAL: Every series object MUST include an \"id\" property set to the exact completeName of the corresponding measure column. Every axis (xAxis/yAxis) that uses \"data\" MUST include an \"id\" set to the exact completeName of the corresponding category column. Without this, real data will NOT be displayed.",
+            "CRITICAL: ",
+            "- Every series object MUST include an \"id\" property set to the exact completeName of the corresponding measure column.",
+            "- Every axis (xAxis/yAxis) that uses \"data\" MUST include an \"id\" set to the exact completeName of the corresponding category column. Without this, real data will NOT be displayed.",
         );
 
         if (categoryCols.length > 0) {
@@ -190,7 +192,7 @@ export function buildDeveloperMessage(executionData?: PivotGridResponse): string
             lines.push(
                 "",
                 "Example axis structure:",
-                `{ "id": "${catExample.completeName}", "type": "category", "data": [...] }`,
+                `{ "id": "${catExample.completeName}", "name": "${catExample.header.caption}", "type": "category", "data": [...] }`,
             );
         }
 

@@ -4,7 +4,6 @@ import type {
     PivotGridResponse,
     PivotGridColumn,
     PivotGridRow,
-    PivotGridMetaValue,
 } from "../types/pivot-grid-response.types";
 
 type ColumnType = "text" | "number" | "date" | "id";
@@ -143,8 +142,7 @@ export class DataObfuscator {
 }
 
 function buildSchemaDescription(
-    cols: PivotGridColumn[],
-    metaValues: PivotGridMetaValue[]
+    cols: PivotGridColumn[]
 ): string {
     const lines: string[] = [
         "## Schema",
@@ -154,17 +152,22 @@ function buildSchemaDescription(
 
     for (let i = 0; i < cols.length; i++) {
         const col = cols[i]!;
+
+        if (!col.visible) {
+            continue;
+        }
+
         const type = classifyColumn(col);
         const section = sectionLabel(col.section);
-        lines.push(`| ${i} | ${col.completeName} | ${col.header.caption} | ${type} | ${section} |`);
+        lines.push(`| ${i} | ${col.completeName || col.header.caption} | ${col.header.caption} | ${type} | ${section} |`);
     }
 
-    if (metaValues.length > 0) {
-        const metaStr = metaValues
-            .map((m) => `${m.completeName ?? m.linkName} (${m.title})`)
-            .join(", ");
-        lines.push("", `Meta values: ${metaStr}`);
-    }
+    // if (metaValues.length > 0) {
+    //     const metaStr = metaValues
+    //         .map((m) => `${m.completeName ?? m.linkName} (${m.title})`)
+    //         .join(", ");
+    //     lines.push("", `Meta values: ${metaStr}`);
+    // }
 
     return lines.join("\n");
 }
@@ -204,13 +207,13 @@ export function buildDataSummary(data: PivotGridResponse): string {
     const parts: string[] = [
         "Query executed successfully.",
         "",
-        buildSchemaDescription(data.cols, data.metaValues),
+        buildSchemaDescription(data.cols),
     ];
 
     if (data.rows.length > 0) {
         parts.push(
             "",
-            "## Sample Data (first 10 rows, obfuscated)",
+            "## Sample Data CSV (first 10 rows, obfuscated)",
             buildObfuscatedCsv(data.rows, data.cols, obfuscator),
         );
     }
