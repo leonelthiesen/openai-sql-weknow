@@ -13,6 +13,7 @@ import { handleExtractData } from "./tool-handlers/extract-data.handler";
 import { handleRenderChart } from "./tool-handlers/render-chart.handler";
 import { logger } from "../utils/logger";
 import { buildDataSummary } from "../utils/obfuscate-pivot-data";
+import { generatePivotCSV } from "../utils/pivot-grid-data-csv-transformer";
 import { PivotGridResponse } from "../types/pivot-grid-response.types";
 
 const MAX_RETRY_ATTEMPTS = 3;
@@ -21,6 +22,7 @@ export interface ToolCallResult {
     structuredOutput: OpenAIResponseSchema;
     openAiItems: OpenAiItem[];
     executionData?: PivotGridResponse;
+    pivotCsv?: string;
     errorResponse?: string | Object;
 }
 
@@ -169,10 +171,19 @@ export async function createModelResponse(
         logger.info("openai", `Retry ${attempt}: new query generated`);
     }
 
-    // ── Build execution output for LLM context ──────────────────────────────
+    // ── Build pivot CSV and execution output for LLM context ─────────────────
+    let pivotCsv: string | undefined;
+    if (executionData) {
+        try {
+            pivotCsv = generatePivotCSV(executionData, currentArgs.query);
+        } catch {
+            // pivot CSV generation failed, continue without it
+        }
+    }
+
     let dataOutput: string;
     if (executionData) {
-        dataOutput = buildDataSummary(executionData);
+        dataOutput = buildDataSummary(executionData, pivotCsv);
     } else if (errorResponse) {
         dataOutput = `Query execution failed: ${typeof errorResponse === "string" ? errorResponse : JSON.stringify(errorResponse)}`;
     } else {
@@ -195,7 +206,8 @@ export async function createModelResponse(
             input,
             lastResponse.output,
             extractDataFunctionCallOutput,
-            executionData
+            executionData,
+            currentArgs.query
         );
         openAiItems.push(...chartResult.openAiItems);
         chartConfig = chartResult.chartConfig;
@@ -213,6 +225,7 @@ export async function createModelResponse(
         },
         openAiItems,
         executionData,
+        pivotCsv,
         errorResponse,
     };
 }

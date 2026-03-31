@@ -1,8 +1,39 @@
-import { LLMHavingFilters, LLMStructuredOutput, LLMWhereFilters } from "../models/llm-structured-output.models";
+import { LLMAggregateFunction, LLMHavingFilters, LLMStructuredOutput, LLMWhereFilters } from "../models/llm-structured-output.models";
 import { TComponentApi_TExecutePivotTableCustomInput, TCustomFilterValueMode, TCustomHavingFilter, TCustomWhereFilter } from "../models/dashboard-object-dto-custom.models";
 import { TGridBaseType } from "../models/TGridBaseType";
 import { TComponentType } from "../models/TComponentType";
 import { TMeasureFunction } from "../models/TMeasureFunction";
+
+function toMeasureFunction (aggregateFunction: LLMAggregateFunction): TMeasureFunction {
+    switch (aggregateFunction) {
+        case "NONE":
+            return TMeasureFunction.fnNone;
+        case "COUNT":
+            return TMeasureFunction.fnCount;
+        case "COUNT_DISTINCT":
+            return TMeasureFunction.fnDistinctCount;
+        case "SUM":
+            return TMeasureFunction.fnSum;
+        case "MAX":
+            return TMeasureFunction.fnMax;
+        case "MIN":
+            return TMeasureFunction.fnMin;
+        case "AVG":
+            return TMeasureFunction.fnAverage;
+        case "LIST":
+            return TMeasureFunction.fnList;
+        case "LIST_DISTINCT":
+            return TMeasureFunction.fnDistinctList;
+        case "SUM_DISTINCT":
+            return TMeasureFunction.fnDistinctSum;
+        case "AVG_DISTINCT":
+            return TMeasureFunction.fnDistinctAverage;
+        default: {
+            const exhaustiveCheck: never = aggregateFunction;
+            throw new Error(`Unsupported aggregateFunction: ${String(exhaustiveCheck)}`);
+        }
+    }
+}
 
 /**
  * Converte LLMWhereFilters para TCustomWhereFilter
@@ -46,7 +77,7 @@ function convertHavingFilters (llmFilters: LLMHavingFilters): TCustomHavingFilte
         join: llmFilters.join,
         not: llmFilters.not,
         operator: llmFilters.operator,
-        measureFunction: llmFilters.measureFunction,
+        measureFunction: toMeasureFunction(llmFilters.aggregateFunction),
     };
 
     if (llmFilters.values && llmFilters.values.length > 0) {
@@ -121,7 +152,7 @@ export function transformLLMToComponentExecuteInput (
         .filter(m => m.completeName)
         .map(m => ({
             completeName: m.completeName,
-            measureFunction: m.measureFunction || TMeasureFunction.fnNone,
+            measureFunction: toMeasureFunction(m.aggregateFunction),
             title: m.title,
         }));
 
@@ -131,7 +162,7 @@ export function transformLLMToComponentExecuteInput (
         .map(s => ({
             completeName: s.completeName,
             direction: s.direction,
-            measureFunction: s.measureFunction || TMeasureFunction.fnNone,
+            measureFunction: toMeasureFunction(s.aggregateFunction),
         }));
 
     // rowSort = categorySort
@@ -140,7 +171,7 @@ export function transformLLMToComponentExecuteInput (
         .map(s => ({
             completeName: s.completeName,
             direction: s.direction,
-            measureFunction: s.measureFunction || TMeasureFunction.fnNone,
+            measureFunction: toMeasureFunction(s.aggregateFunction),
         }));
 
     // Converte os filtros

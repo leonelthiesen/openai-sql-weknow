@@ -119,7 +119,7 @@ describe("buildDataSummary", () => {
 
         expect(result).toContain("Query executed successfully.");
         expect(result).toContain("## Schema");
-        expect(result).toContain("## Sample Data (first 10 rows, obfuscated)");
+        expect(result).toContain("## Sample Data CSV (first 10 rows, obfuscated)");
         expect(result).toContain("Total rows: 2");
         expect(result).toContain("| 0 | empresa |");
         expect(result).toContain("| 1 | total |");
@@ -170,7 +170,7 @@ describe("buildDataSummary", () => {
         const result = buildDataSummary(data);
 
         // Header + 10 data rows = 11 lines in CSV block
-        const csvSection = result.split("## Sample Data (first 10 rows, obfuscated)\n")[1]!;
+        const csvSection = result.split("## Sample Data CSV (first 10 rows, obfuscated)\n")[1]!;
         const csvLines = csvSection.split("\n\nTotal rows:")[0]!.split("\n");
         expect(csvLines).toHaveLength(11); // 1 header + 10 data
         expect(result).toContain("Total rows: 25");

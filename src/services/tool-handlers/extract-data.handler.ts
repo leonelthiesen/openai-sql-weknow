@@ -32,18 +32,18 @@ export async function handleExtractData(
         userMessageSuggestions: args.userMessageSuggestions,
     };
 
-    const executeInput = transformLLMToComponentExecuteInput(structuredOutput, metadataId);
-    if (!executeInput) {
-        return {
-            success: false,
-            error: {
-                message: "Failed to transform LLM output to execute input",
-                retriable: false,
-            },
-        };
-    }
-
     try {
+        const executeInput = transformLLMToComponentExecuteInput(structuredOutput, metadataId);
+        if (!executeInput) {
+            return {
+                success: false,
+                error: {
+                    message: "Failed to transform LLM output to execute input",
+                    retriable: false,
+                },
+            };
+        }
+
         const accessToken = await weknowService.getAccessToken();
         executeInput.accessToken = accessToken;
         const response = await weknowService.executePivotGridComponent(JSON.stringify(executeInput));

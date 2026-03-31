@@ -59,7 +59,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
                 "seriesDimensions, categoryDimensions, measures, sorting, filters, and havingFilters.",
                 "A calculated field is effective only when referenced by its 'completeName' in those properties.",
                 "Use calculated fields when direct fields from the virtual table are not sufficient.",
-                "If a referenced calculated field has hasAggregateFunction=true, always set the reference measureFunction to 0 (fnNone).",
+                "If a referenced calculated field has hasAggregateFunction=true, always set the reference aggregateFunction to NONE.",
                 "Set hasAggregateFunction explicitly to avoid misinterpretation."
               ),
               items: {
@@ -142,9 +142,9 @@ export function getExtractDataToolDefinition(): FunctionTool {
                     description: "completeName of a seriesDimension or measure field.",
                   },
                   direction: { $ref: "#/$defs/TSortDirection" },
-                  measureFunction: { $ref: "#/$defs/TMeasureFunction" },
+                  aggregateFunction: { $ref: "#/$defs/TAggregateFunction" },
                 },
-                required: ["completeName", "direction", "measureFunction"],
+                required: ["completeName", "direction", "aggregateFunction"],
                 additionalProperties: false,
               },
             },
@@ -189,9 +189,9 @@ export function getExtractDataToolDefinition(): FunctionTool {
                     description: "completeName of a categoryDimension or measure field.",
                   },
                   direction: { $ref: "#/$defs/TSortDirection" },
-                  measureFunction: { $ref: "#/$defs/TMeasureFunction" },
+                  aggregateFunction: { $ref: "#/$defs/TAggregateFunction" },
                 },
-                required: ["completeName", "direction", "measureFunction"],
+                required: ["completeName", "direction", "aggregateFunction"],
                 additionalProperties: false,
               },
             },
@@ -213,16 +213,16 @@ export function getExtractDataToolDefinition(): FunctionTool {
                       "Use only the 'completeName' from the provided fields or 'completeName' of calculated fields.",
                     ),
                   },
-                  measureFunction: {
-                     description: "When referencing a calculated field with hasAggregateFunction=true, set measureFunction to 0 (fnNone).",
-                    $ref: "#/$defs/TMeasureFunction"
+                  aggregateFunction: {
+                     description: "When referencing a calculated field with hasAggregateFunction=true, set aggregateFunction to NONE.",
+                    $ref: "#/$defs/TAggregateFunction"
                   },
                   title: {
                     type: "string",
                     description: "Friendly title in PORTUGUESE for display purposes.",
                   },
                 },
-                required: ["completeName", "measureFunction", "title"],
+                required: ["completeName", "aggregateFunction", "title"],
                 additionalProperties: false,
               },
             },
@@ -244,25 +244,25 @@ export function getExtractDataToolDefinition(): FunctionTool {
       required: ["message", "userMessageSuggestions", "renderType", "query"],
       additionalProperties: false,
       $defs: {
-        TMeasureFunction: {
-          type: "number",
+        TAggregateFunction: {
+          type: "string",
           description: description(
-            "Enum for measure/aggregation functions.",
-            "Use fnNone (0) when referencing a calculated field with hasAggregateFunction=true.",
+            "Enum for SQL-like aggregation functions.",
+            "Use NONE when referencing a calculated field with hasAggregateFunction=true.",
           ),
-          enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          enum: ["NONE", "COUNT", "COUNT_DISTINCT", "SUM", "MAX", "MIN", "AVG", "LIST", "LIST_DISTINCT", "SUM_DISTINCT", "AVG_DISTINCT"],
           oneOf: [
-            { const: 0, title: "fnNone", description: "No aggregation function" },
-            { const: 1, title: "fnCount", description: "Count function" },
-            { const: 2, title: "fnDistinctCount", description: "Distinct count function" },
-            { const: 3, title: "fnSum", description: "Sum function" },
-            { const: 4, title: "fnMax", description: "Max function" },
-            { const: 5, title: "fnMin", description: "Min function" },
-            { const: 6, title: "fnAverage", description: "Average function" },
-            { const: 7, title: "fnList", description: "List function" },
-            { const: 8, title: "fnDistinctList", description: "Distinct list function" },
-            { const: 9, title: "fnDistinctSum", description: "Distinct sum function" },
-            { const: 10, title: "fnDistinctAverage", description: "Distinct average function" },
+            { const: "NONE", title: "NONE", description: "No aggregation function" },
+            { const: "COUNT", title: "COUNT", description: "Count function" },
+            { const: "COUNT_DISTINCT", title: "COUNT_DISTINCT", description: "Distinct count function" },
+            { const: "SUM", title: "SUM", description: "Sum function" },
+            { const: "MAX", title: "MAX", description: "Max function" },
+            { const: "MIN", title: "MIN", description: "Min function" },
+            { const: "AVG", title: "AVG", description: "Average function" },
+            { const: "LIST", title: "LIST", description: "List function" },
+            { const: "LIST_DISTINCT", title: "LIST_DISTINCT", description: "Distinct list function" },
+            { const: "SUM_DISTINCT", title: "SUM_DISTINCT", description: "Distinct sum function" },
+            { const: "AVG_DISTINCT", title: "AVG_DISTINCT", description: "Distinct average function" },
           ],
         },
         TSortDirection: {
@@ -366,7 +366,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
               type: "string",
               description: description(
                 "Use the 'completeName' from the provided fields or calculated fields.",
-                "For calculated fields with hasAggregateFunction=true, set measureFunction to 0 (fnNone).",
+                "For calculated fields with hasAggregateFunction=true, set aggregateFunction to NONE.",
               ),
             },
             filters: {
@@ -375,7 +375,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
               description: "Recursive list for nested filters",
             },
             join: { $ref: "#/$defs/TBooleanOperator" },
-            measureFunction: { $ref: "#/$defs/TMeasureFunction" },
+            aggregateFunction: { $ref: "#/$defs/TAggregateFunction" },
             not: {
               type: "boolean",
               description: description(
@@ -389,7 +389,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
             "completeName",
             "filters",
             "join",
-            "measureFunction",
+            "aggregateFunction",
             "not",
             "operator",
             "values",

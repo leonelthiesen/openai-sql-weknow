@@ -4,209 +4,172 @@ import { callOpenAI, extractFunctionCalls } from "../openai-call";
 import { getRenderChartToolDefinition } from "../../models/tool-definitions";
 import { parseToolArgs } from "../../utils/tool-args-parser";
 import type { RenderChartArgs } from "../../types/tool-args.types";
-import type { PivotGridResponse, PivotGridColumn } from "../../types/pivot-grid-response.types";
+import type { PivotGridResponse } from "../../types/pivot-grid-response.types";
+import type { LLMQuery } from "../../models/llm-structured-output.models";
+import { transformToChartData, type ChartData } from "../../utils/pivot-grid-data-transformer";
 import { logger } from "../../utils/logger";
-
-const CATEGORY_SECTION = 17;
-const MEASURE_SECTION = 15;
 
 export interface RenderChartResult {
     chartConfig?: object;
     openAiItems: OpenAiItem[];
 }
 
-// ── Hydrate ECharts config with real data ────────────────────────────────────
+// ── Chart data manifest ──────────────────────────────────────────────────────
 
-function buildColumnIndexMap(cols: PivotGridColumn[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (let i = 0; i < cols.length; i++) {
-        map.set(cols[i]!.completeName, i);
-    }
-    return map;
+export interface ChartDataManifest {
+    labels: string[];
+    datasets: { index: number; label: string; data: number[] }[];
 }
 
-function extractColumnValues(data: PivotGridResponse, colIndex: number): string[] {
-    return data.rows.map((row) => {
-        let key = `d${colIndex + 1}` as `d${number}`;
-        const value = row[key];
-        return value != null ? String(value) : "";
-    });
-}
-
-function parseNumericValue(value: string): string | number {
-    if (value === "" || value == null) return 0;
-    const cleaned = value.replace(/[^\d.,-]/g, "").replace(",", ".");
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? value : num;
-}
-
-function hydrateAxisItem(
-    ax: any,
+export function buildChartDataManifest(
     data: PivotGridResponse,
-    colIndexMap: Map<string, number>,
-    fallbackValues: string[]
-): void {
-    if (!ax || !Array.isArray(ax.data)) return;
+    queryConfig: LLMQuery
+): ChartDataManifest {
+    const chartData: ChartData = transformToChartData(data, queryConfig);
 
-    if (ax.id && colIndexMap.has(ax.id)) {
-        ax.data = extractColumnValues(data, colIndexMap.get(ax.id)!);
-    } else if (fallbackValues.length > 0) {
-        ax.data = fallbackValues;
-    }
+    return {
+        labels: chartData.labels,
+        datasets: chartData.datasets.map((ds, i) => ({
+            index: i,
+            label: ds.label,
+            data: ds.data,
+        })),
+    };
 }
 
-function replaceAxisData(
-    axis: any,
-    data: PivotGridResponse,
-    colIndexMap: Map<string, number>,
-    fallbackValues: string[]
-): void {
+// ── Hydrate ECharts config with manifest data (positional) ───────────────────
+
+function setCategoryAxisData(axis: any, labels: string[]): void {
     if (!axis) return;
 
-    if (Array.isArray(axis)) {
-        for (const ax of axis) {
-            hydrateAxisItem(ax, data, colIndexMap, fallbackValues);
+    const items = Array.isArray(axis) ? axis : [axis];
+    for (const ax of items) {
+        if (ax && (ax.type === "category" || Array.isArray(ax.data))) {
+            ax.data = labels;
         }
-    } else {
-        hydrateAxisItem(axis, data, colIndexMap, fallbackValues);
     }
 }
 
-function hydrateDataset(config: any, data: PivotGridResponse, _colIndexMap: Map<string, number>): void {
-    if (!config.dataset) return;
+function hydrateDatasetFromManifest(config: any, manifest: ChartDataManifest): boolean {
+    if (!config.dataset) return false;
 
     const dataset = Array.isArray(config.dataset) ? config.dataset[0] : config.dataset;
-    if (!dataset || !Array.isArray(dataset.source)) return;
+    if (!dataset || !Array.isArray(dataset.source)) return false;
 
-    const header = data.cols.map((col) => col.header.caption);
-    const rows = data.rows.map((row) => {
-        return data.cols.map((col, i) => {
-            const value = row[`d${i + 1}` as `d${number}`] ?? "";
-            return col.section === CATEGORY_SECTION ? value : parseNumericValue(value);
-        });
+    const header = ["Category", ...manifest.datasets.map((ds) => ds.label)];
+    const rows = manifest.labels.map((label, rowIdx) => {
+        return [label, ...manifest.datasets.map((ds) => ds.data[rowIdx] ?? 0)];
     });
 
     dataset.source = [header, ...rows];
+    return true;
 }
 
 export function hydrateChartConfig(
     chartConfig: object,
-    data: PivotGridResponse
+    manifest: ChartDataManifest
 ): object {
-    if (data.rows.length === 0) return chartConfig;
+    if (manifest.labels.length === 0) return chartConfig;
 
-    const config = JSON.parse(JSON.stringify(chartConfig));
-    const colIndexMap = buildColumnIndexMap(data.cols);
+    const config: any = JSON.parse(JSON.stringify(chartConfig));
 
-    // Find category columns and extract their values
-    const categoryCols = data.cols
-        .map((col, i) => ({ col, index: i }))
-        .filter(({ col }) => col.section === CATEGORY_SECTION);
-
-    const primaryCategoryValues = categoryCols.length > 0
-        ? extractColumnValues(data, categoryCols[0]!.index)
-        : [];
-
-    // Replace axis data with real category values (id-based or fallback)
-    replaceAxisData(config.xAxis, data, colIndexMap, primaryCategoryValues);
-    replaceAxisData(config.yAxis, data, colIndexMap, primaryCategoryValues);
-
-    // Replace series data using id → completeName mapping
-    if (Array.isArray(config.series)) {
-        const matchedCompleteNames = new Set<string>();
-
-        for (const series of config.series) {
-            if (!series.id || !colIndexMap.has(series.id)) continue;
-
-            const colIndex = colIndexMap.get(series.id)!;
-            const values = extractColumnValues(data, colIndex);
-            series.data = values.map(parseNumericValue);
-            matchedCompleteNames.add(series.id);
-        }
-
-        // Fallback: assign unmatched series to unmatched measure columns
-        const unmatchedMeasures = data.cols
-            .filter((col) => col.section === MEASURE_SECTION && !matchedCompleteNames.has(col.completeName));
-        const unmatchedSeries = config.series
-            .filter((s: any) => !s.id || !colIndexMap.has(s.id));
-
-        if (unmatchedSeries.length > 0 && unmatchedMeasures.length > 0) {
-            if (unmatchedSeries.length === unmatchedMeasures.length) {
-                // Positional match when counts align
-                for (let i = 0; i < unmatchedSeries.length; i++) {
-                    const col = unmatchedMeasures[i]!;
-                    const colIndex = colIndexMap.get(col.completeName)!;
-                    const values = extractColumnValues(data, colIndex);
-                    unmatchedSeries[i].id = col.completeName;
-                    unmatchedSeries[i].data = values.map(parseNumericValue);
-                }
-            } else {
-                // Name-based matching
-                for (const series of unmatchedSeries) {
-                    if (!series.name) continue;
-                    const seriesName = String(series.name).toLowerCase();
-                    const match = unmatchedMeasures.find(
-                        (col) => col.header.caption.toLowerCase() === seriesName
-                    );
-                    if (match) {
-                        const colIndex = colIndexMap.get(match.completeName)!;
-                        const values = extractColumnValues(data, colIndex);
-                        series.id = match.completeName;
-                        series.data = values.map(parseNumericValue);
-                    }
-                }
-            }
-        }
+    // Handle dataset.source pattern first
+    if (hydrateDatasetFromManifest(config, manifest)) {
+        return config;
     }
 
-    // Handle dataset pattern
-    hydrateDataset(config, data, colIndexMap);
+    // Replace category axis data
+    setCategoryAxisData(config.xAxis, manifest.labels);
+    setCategoryAxisData(config.yAxis, manifest.labels);
+
+    // Replace series data by position
+    if (Array.isArray(config.series)) {
+        for (let i = 0; i < config.series.length; i++) {
+            if (i < manifest.datasets.length) {
+                const ds = manifest.datasets[i]!;
+                config.series[i].data = ds.data;
+                config.series[i].name = ds.label;
+                config.series[i].id = `series-${i}`;
+            }
+        }
+
+        // If LLM created fewer series than manifest, add missing ones
+        if (config.series.length < manifest.datasets.length) {
+            const templateType = config.series[0]?.type ?? "bar";
+            for (let i = config.series.length; i < manifest.datasets.length; i++) {
+                const ds = manifest.datasets[i]!;
+                config.series.push({
+                    id: `series-${i}`,
+                    name: ds.label,
+                    type: templateType,
+                    data: ds.data,
+                });
+            }
+            logger.warn("render_chart_config", `Added ${manifest.datasets.length - config.series.length} missing series`);
+        }
+
+        // If LLM created more series than manifest, truncate
+        if (config.series.length > manifest.datasets.length) {
+            logger.warn(
+                "render_chart_config",
+                `Truncating ${config.series.length - manifest.datasets.length} extra series`
+            );
+            config.series.length = manifest.datasets.length;
+        }
+    }
 
     return config;
 }
 
 // ── Developer message builder ────────────────────────────────────────────────
 
-export function buildDeveloperMessage(executionData?: PivotGridResponse): string {
+export function buildDeveloperMessage(manifest?: ChartDataManifest): string {
     const lines = [
         "The extract_data tool was called and CSV sample data are provided.",
         "Use this CSV data and the user's request to render an appropriate chart configuration.",
     ];
 
-    if (executionData && executionData.cols.length > 0) {
-        const categoryCols = executionData.cols.filter((c) => c.section === CATEGORY_SECTION && c.visible);
-        const measureCols = executionData.cols.filter((c) => c.section === MEASURE_SECTION && c.visible);
+    if (manifest && manifest.datasets.length > 0) {
+        lines.push(
+            "",
+            "CRITICAL STRUCTURAL REQUIREMENTS:",
+            `- You MUST create exactly ${manifest.datasets.length} series objects, in the order listed below.`,
+            "- The data arrays will be REPLACED with real values after generation. Use placeholder arrays of the correct length.",
+            `- Each series.data placeholder MUST have exactly ${manifest.labels.length} elements (use zeros).`,
+            "- Set xAxis (or yAxis for horizontal charts) with type \"category\" and a placeholder data array.",
+            "- Do NOT set \"id\" on series or axes — IDs are managed automatically.",
+            "- Focus on chart type, colors, tooltip, legend, and visual formatting.",
+            "",
+            `Category labels (${manifest.labels.length} items):`,
+            JSON.stringify(manifest.labels.slice(0, 20)) + (manifest.labels.length > 20 ? ` ... (${manifest.labels.length} total)` : ""),
+            "",
+            `Series to create (exactly ${manifest.datasets.length}, in this order):`,
+        );
+
+        for (let i = 0; i < manifest.datasets.length; i++) {
+            lines.push(`  [${i}] "${manifest.datasets[i]!.label}"`);
+        }
 
         lines.push(
             "",
-            "CRITICAL: ",
-            "- Every series object MUST include an \"id\" property set to the exact completeName of the corresponding measure column.",
-            "- Every axis (xAxis/yAxis) that uses \"data\" MUST include an \"id\" set to the exact completeName of the corresponding category column. Without this, real data will NOT be displayed.",
+            "Example structure:",
+            `{`,
+            `  "xAxis": { "type": "category", "data": [${new Array(Math.min(manifest.labels.length, 3)).fill(0).join(", ")}${manifest.labels.length > 3 ? ", ..." : ""}] },`,
+            `  "yAxis": { "type": "value" },`,
+            `  "series": [`,
         );
 
-        if (categoryCols.length > 0) {
-            const catList = categoryCols.map((c) => `"${c.completeName}" (${c.header.caption})`).join(", ");
-            lines.push(`Category columns (use for axis data, set id to completeName): ${catList}`);
-
-            const catExample = categoryCols[0]!;
-            lines.push(
-                "",
-                "Example axis structure:",
-                `{ "id": "${catExample.completeName}", "name": "${catExample.header.caption}", "type": "category", "data": [...] }`,
-            );
+        for (let i = 0; i < Math.min(manifest.datasets.length, 2); i++) {
+            const ds = manifest.datasets[i]!;
+            const comma = i < Math.min(manifest.datasets.length, 2) - 1 ? "," : "";
+            lines.push(`    { "name": "${ds.label}", "type": "bar", "data": [${new Array(Math.min(manifest.labels.length, 3)).fill(0).join(", ")}${manifest.labels.length > 3 ? ", ..." : ""}] }${comma}`);
         }
 
-        if (measureCols.length > 0) {
-            const measList = measureCols.map((c) => `"${c.completeName}" (${c.header.caption})`).join(", ");
-            lines.push(`Measure columns (use as series, set id to completeName): ${measList}`);
-
-            const example = measureCols[0]!;
-            lines.push(
-                "",
-                "Example series structure:",
-                `{ "id": "${example.completeName}", "name": "${example.header.caption}", "type": "bar", "data": [...] }`,
-            );
+        if (manifest.datasets.length > 2) {
+            lines.push(`    // ... ${manifest.datasets.length - 2} more series`);
         }
+
+        lines.push(`  ]`, `}`);
     }
 
     return lines.join("\n");
@@ -218,12 +181,23 @@ export async function handleRenderChart(
     baseInput: ResponseInputItem[],
     lastResponseOutput: unknown[],
     extractDataCallOutput: OpenAiItem,
-    executionData?: PivotGridResponse
+    executionData?: PivotGridResponse,
+    queryConfig?: LLMQuery
 ): Promise<RenderChartResult> {
     const startTime = Date.now();
     const openAiItems: OpenAiItem[] = [];
 
-    const developerContent = buildDeveloperMessage(executionData);
+    // Build manifest from real data if both are available
+    let manifest: ChartDataManifest | undefined;
+    if (executionData && queryConfig) {
+        try {
+            manifest = buildChartDataManifest(executionData, queryConfig);
+        } catch (err) {
+            logger.error("render_chart_config", "Failed to build chart data manifest", { error: String(err) });
+        }
+    }
+
+    const developerContent = buildDeveloperMessage(manifest);
 
     openAiItems.push({
         type: "message",
@@ -273,8 +247,8 @@ export async function handleRenderChart(
         durationMs: Date.now() - startTime,
     });
 
-    const finalConfig = executionData
-        ? hydrateChartConfig(chartArgs.chartConfig, executionData)
+    const finalConfig = manifest
+        ? hydrateChartConfig(chartArgs.chartConfig, manifest)
         : chartArgs.chartConfig;
 
     return { chartConfig: finalConfig, openAiItems };

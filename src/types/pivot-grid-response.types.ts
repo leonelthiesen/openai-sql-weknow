@@ -1,5 +1,7 @@
+export type RowKey = `d${number}`;
+
 export interface PivotGridRow {
-  [key: `d${number}`]: string;
+  [key: RowKey]: string;
 }
 
 export interface PivotGridColumnHeader {

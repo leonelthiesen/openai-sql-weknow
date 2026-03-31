@@ -202,7 +202,64 @@ function buildObfuscatedCsv(
     return [header, ...dataRows].join("\n");
 }
 
-export function buildDataSummary(data: PivotGridResponse): string {
+function obfuscateCsv(csv: string, obfuscator: DataObfuscator, maxRows = 10): string {
+    const lines = csv.split("\n");
+    if (lines.length <= 1) return csv;
+
+    const header = lines[0]!;
+    const dataLines = lines.slice(1, maxRows + 1);
+
+    const obfuscatedLines = dataLines.map((line) => {
+        const cells = parseCsvLine(line);
+        const obfuscatedCells = cells.map((cell, colIndex) => {
+            const type = detectCellType(cell);
+            return csvEscape(obfuscator.obfuscate(cell, colIndex, type));
+        });
+        return obfuscatedCells.join(",");
+    });
+
+    return [header, ...obfuscatedLines].join("\n");
+}
+
+function parseCsvLine(line: string): string[] {
+    const cells: string[] = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i]!;
+        if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') {
+                current += '"';
+                i++;
+            } else if (ch === '"') {
+                inQuotes = false;
+            } else {
+                current += ch;
+            }
+        } else {
+            if (ch === '"') {
+                inQuotes = true;
+            } else if (ch === ",") {
+                cells.push(current);
+                current = "";
+            } else {
+                current += ch;
+            }
+        }
+    }
+    cells.push(current);
+    return cells;
+}
+
+function detectCellType(value: string): ColumnType {
+    if (value === "" || value == null) return "text";
+    if (/^\d{4}-\d{2}-\d{2}/.test(value)) return "date";
+    if (/^-?\d+([.,]\d+)?$/.test(value)) return "number";
+    return "text";
+}
+
+export function buildDataSummary(data: PivotGridResponse, pivotCsv?: string): string {
     const obfuscator = new DataObfuscator();
 
     const parts: string[] = [
@@ -212,10 +269,20 @@ export function buildDataSummary(data: PivotGridResponse): string {
     ];
 
     if (data.rows.length > 0) {
+        let csvContent: string | undefined;
+
+        if (pivotCsv) {
+            csvContent = obfuscateCsv(pivotCsv, obfuscator);
+        }
+
+        if (!csvContent) {
+            csvContent = buildObfuscatedCsv(data.rows, data.cols, obfuscator);
+        }
+
         parts.push(
             "",
             "## Sample Data CSV (first 10 rows, obfuscated)",
-            buildObfuscatedCsv(data.rows, data.cols, obfuscator),
+            csvContent,
         );
     }
 

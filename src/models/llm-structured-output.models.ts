@@ -1,7 +1,6 @@
 import { TBooleanOperator } from "./TBooleanOperator";
 import { TComparisonOperator } from "./TComparisonOperator";
 import { TFieldType } from "./TFieldType";
-import { TMeasureFunction } from "./TMeasureFunction";
 import { TSortDirection } from "./TSortDirection";
 
 export type LLMStructuredOutputAction = "FOLLOWUP_NEEDED" | "EXTRACT_DATA";
@@ -20,16 +19,29 @@ export interface LLMDimension {
     title: string;
 }
 
+export type LLMAggregateFunction =
+    | "NONE"
+    | "COUNT"
+    | "COUNT_DISTINCT"
+    | "SUM"
+    | "MAX"
+    | "MIN"
+    | "AVG"
+    | "LIST"
+    | "LIST_DISTINCT"
+    | "SUM_DISTINCT"
+    | "AVG_DISTINCT";
+
 export interface LLMMeasure {
     completeName: string;
-    measureFunction: TMeasureFunction;
+    aggregateFunction: LLMAggregateFunction;
     title: string;
 }
 
 export interface LLMSort {
     completeName: string;
     direction: TSortDirection;
-    measureFunction: TMeasureFunction;
+    aggregateFunction: LLMAggregateFunction;
 }
 
 export interface LLMQuery {
@@ -68,7 +80,7 @@ export interface LLMHavingFilters {
     completeName: string;
     filters: LLMHavingFilters[];
     join: TBooleanOperator;
-    measureFunction: TMeasureFunction;
+    aggregateFunction: LLMAggregateFunction;
     not: boolean;
     operator: TComparisonOperator;
     values: LLMFilterValue[];

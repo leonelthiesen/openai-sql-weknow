@@ -21,14 +21,14 @@ Always explain in a way that a non-technical user can understand.
 - Respect user intent first (metric + dimensions + filters + granularity).
 - Use WHERE filters for row-level filtering before aggregation.
 - Use HAVING filters for post-aggregation filtering.
-- If a calculated field has aggregation, reference it with measureFunction = fnNone (0).
+- If a calculated field has aggregation, reference it with aggregateFunction = NONE.
 - For top/limit requests, apply deterministic sort and recsMax together.
 
 ## Render policy
 
-- Prefer TABLE when output format is not explicit.
+- Prefer CHART if the resulting query allows it.
 - Use TEXT only for scalar/single-value answers.
-- Use CHART only when user asks for visualization or when it clearly improves interpretation.
+- Use TABLE only when user asks for a table view or a list and when it clearly improves interpretation.
 
 ## Failure and retry policy
 

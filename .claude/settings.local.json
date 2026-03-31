@@ -5,7 +5,12 @@
       "Bash(npm run:*)",
       "Bash(npm test:*)",
       "Bash(find C:/ProjetosGit/openai-sql-weknow/src -name *.ts -type f)",
-      "Bash(grep -r executionData C:/ProjetosGit/openai-sql-weknow/vanna --include=*.ts --include=*.tsx)"
+      "Bash(grep -r executionData C:/ProjetosGit/openai-sql-weknow/vanna --include=*.ts --include=*.tsx)",
+      "Bash(npx vitest:*)",
+      "Bash(find /c/ProjetosGit/openai-sql-weknow -name *.json -path */data/*)",
+      "Bash(grep -n \"buildDataSummary\\\\|generatePivotCSV\" /c/ProjetosGit/openai-sql-weknow/src/utils/*.ts)",
+      "Bash(grep -n \"getRenderChartToolDefinition\\\\|RenderChartArgs\" /c/ProjetosGit/openai-sql-weknow/src/**/*.ts)",
+      "Bash(xargs ls:*)"
     ]
   }
 }

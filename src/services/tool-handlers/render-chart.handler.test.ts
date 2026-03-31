@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { hydrateChartConfig, buildDeveloperMessage } from "./render-chart.handler";
+import { hydrateChartConfig, buildDeveloperMessage, buildChartDataManifest } from "./render-chart.handler";
+import type { ChartDataManifest } from "./render-chart.handler";
 import { TFieldType } from "../../models/TFieldType";
 import type { PivotGridResponse, PivotGridColumn } from "../../types/pivot-grid-response.types";
+import type { LLMQuery } from "../../models/llm-structured-output.models";
 
 function makeCol(completeName: string, section: number, dataType = TFieldType.ftString): PivotGridColumn {
     return {
@@ -21,7 +23,7 @@ function makeData(
 ): PivotGridResponse {
     const rows = rowData.map((values) => {
         const row: Record<string, string> = {};
-        values.forEach((v, i) => { row[`d${i}`] = v; });
+        values.forEach((v, i) => { row[`d${i + 1}`] = v; });
         return row;
     }) as any;
 
@@ -45,152 +47,87 @@ function makeData(
     };
 }
 
-describe("hydrateChartConfig", () => {
-    const cols = [
-        makeCol("vendas.empresa", 17),           // d0 - category
-        makeCol("vendas.total", 15, TFieldType.ftFloat), // d1 - measure
-    ];
-    const data = makeData(cols, [
-        ["Empresa A", "1000.50"],
-        ["Empresa B", "2000.75"],
-        ["Empresa C", "3000.00"],
-    ]);
+function makeManifest(labels: string[], datasets: { label: string; data: number[] }[]): ChartDataManifest {
+    return {
+        labels,
+        datasets: datasets.map((ds, i) => ({ index: i, label: ds.label, data: ds.data })),
+    };
+}
 
-    it("replaces xAxis.data with real category values", () => {
+describe("hydrateChartConfig", () => {
+    const manifest = makeManifest(
+        ["Empresa A", "Empresa B", "Empresa C"],
+        [{ label: "vendas.total - ", data: [1000.50, 2000.75, 3000.00] }]
+    );
+
+    it("replaces xAxis.data with manifest labels", () => {
         const config = {
-            xAxis: { data: ["fake1", "fake2", "fake3"] },
-            series: [{ id: "vendas.total", data: [1, 2, 3] }],
+            xAxis: { type: "category", data: ["fake1", "fake2", "fake3"] },
+            series: [{ name: "Total", data: [0, 0, 0] }],
         };
 
-        const result = hydrateChartConfig(config, data) as any;
+        const result = hydrateChartConfig(config, manifest) as any;
         expect(result.xAxis.data).toEqual(["Empresa A", "Empresa B", "Empresa C"]);
     });
 
-    it("replaces series.data with real numeric values", () => {
+    it("replaces series.data with manifest data by position", () => {
         const config = {
-            xAxis: { data: ["fake1", "fake2", "fake3"] },
-            series: [{ id: "vendas.total", data: [1, 2, 3] }],
+            xAxis: { type: "category", data: ["fake1", "fake2", "fake3"] },
+            series: [{ name: "Total", data: [0, 0, 0] }],
         };
 
-        const result = hydrateChartConfig(config, data) as any;
+        const result = hydrateChartConfig(config, manifest) as any;
         expect(result.series[0].data).toEqual([1000.50, 2000.75, 3000.00]);
+        expect(result.series[0].name).toBe("vendas.total - ");
+    });
+
+    it("assigns unique series IDs", () => {
+        const config = {
+            xAxis: { type: "category", data: ["fake"] },
+            series: [{ name: "Total", data: [0] }],
+        };
+
+        const result = hydrateChartConfig(config, manifest) as any;
+        expect(result.series[0].id).toBe("series-0");
     });
 
     it("handles array-style xAxis", () => {
         const config = {
-            xAxis: [{ data: ["fake1", "fake2"] }],
-            series: [{ id: "vendas.total", data: [1, 2] }],
+            xAxis: [{ type: "category", data: ["fake1", "fake2"] }],
+            series: [{ name: "Total", data: [0, 0] }],
         };
 
-        const result = hydrateChartConfig(config, data) as any;
+        const result = hydrateChartConfig(config, manifest) as any;
         expect(result.xAxis[0].data).toEqual(["Empresa A", "Empresa B", "Empresa C"]);
     });
 
     it("handles yAxis replacement for horizontal charts", () => {
         const config = {
-            yAxis: { data: ["fake1", "fake2"] },
+            yAxis: { type: "category", data: ["fake1", "fake2"] },
             xAxis: { type: "value" },
-            series: [{ id: "vendas.total", data: [1, 2] }],
+            series: [{ name: "Total", data: [0, 0] }],
         };
 
-        const result = hydrateChartConfig(config, data) as any;
+        const result = hydrateChartConfig(config, manifest) as any;
         expect(result.yAxis.data).toEqual(["Empresa A", "Empresa B", "Empresa C"]);
     });
 
-    it("replaces xAxis.data using id when it matches a category column", () => {
-        const config = {
-            xAxis: { id: "vendas.empresa", data: ["fake1", "fake2"] },
-            series: [{ id: "vendas.total", data: [1, 2] }],
-        };
+    it("returns config as-is when labels are empty", () => {
+        const emptyManifest = makeManifest([], []);
+        const config = { xAxis: { data: ["a"] }, series: [{ data: [1] }] };
 
-        const result = hydrateChartConfig(config, data) as any;
-        expect(result.xAxis.data).toEqual(["Empresa A", "Empresa B", "Empresa C"]);
-    });
-
-    it("replaces yAxis.data using id for horizontal charts", () => {
-        const config = {
-            yAxis: { id: "vendas.empresa", data: ["fake1"] },
-            xAxis: { type: "value" },
-            series: [{ id: "vendas.total", data: [1] }],
-        };
-
-        const result = hydrateChartConfig(config, data) as any;
-        expect(result.yAxis.data).toEqual(["Empresa A", "Empresa B", "Empresa C"]);
-    });
-
-    it("matches each axis to the correct category column by id", () => {
-        const twoCatCols = [
-            makeCol("vendas.regiao", 17),
-            makeCol("vendas.empresa", 17),
-            makeCol("vendas.total", 15, TFieldType.ftFloat),
-        ];
-        const twoCatData = makeData(twoCatCols, [
-            ["Sul", "Empresa A", "100"],
-            ["Norte", "Empresa B", "200"],
-        ]);
-
-        const config = {
-            xAxis: { id: "vendas.empresa", data: ["fake"] },
-            yAxis: { id: "vendas.regiao", data: ["fake"] },
-            series: [{ id: "vendas.total", data: [1] }],
-        };
-
-        const result = hydrateChartConfig(config, twoCatData) as any;
-        expect(result.xAxis.data).toEqual(["Empresa A", "Empresa B"]);
-        expect(result.yAxis.data).toEqual(["Sul", "Norte"]);
-    });
-
-    it("falls back to primary category when axis has no id", () => {
-        const config = {
-            xAxis: { data: ["fake1"] },
-            series: [{ id: "vendas.total", data: [1] }],
-        };
-
-        const result = hydrateChartConfig(config, data) as any;
-        expect(result.xAxis.data).toEqual(["Empresa A", "Empresa B", "Empresa C"]);
-    });
-
-    it("handles array-style axis with id", () => {
-        const config = {
-            xAxis: [{ id: "vendas.empresa", data: ["fake"] }],
-            series: [{ id: "vendas.total", data: [1] }],
-        };
-
-        const result = hydrateChartConfig(config, data) as any;
-        expect(result.xAxis[0].data).toEqual(["Empresa A", "Empresa B", "Empresa C"]);
-    });
-
-    it("leaves series without matching id untouched", () => {
-        const config = {
-            xAxis: { data: ["fake1"] },
-            series: [
-                { id: "vendas.total", data: [1] },
-                { id: "unknown.field", data: [99] },
-                { name: "no-id-series", data: [42] },
-            ],
-        };
-
-        const result = hydrateChartConfig(config, data) as any;
-        expect(result.series[1].data).toEqual([99]);
-        expect(result.series[2].data).toEqual([42]);
-    });
-
-    it("returns config as-is when rows are empty", () => {
-        const emptyData = makeData(cols, []);
-        const config = { xAxis: { data: ["a"] }, series: [{ id: "vendas.total", data: [1] }] };
-
-        const result = hydrateChartConfig(config, emptyData);
+        const result = hydrateChartConfig(config, emptyManifest);
         expect(result).toEqual(config);
     });
 
     it("does not mutate the original config", () => {
         const config = {
-            xAxis: { data: ["fake1"] },
-            series: [{ id: "vendas.total", data: [1] }],
+            xAxis: { type: "category", data: ["fake1"] },
+            series: [{ name: "Total", data: [0] }],
         };
         const original = JSON.parse(JSON.stringify(config));
 
-        hydrateChartConfig(config, data);
+        hydrateChartConfig(config, manifest);
         expect(config).toEqual(original);
     });
 
@@ -200,130 +137,188 @@ describe("hydrateChartConfig", () => {
             series: [{ type: "bar" }],
         };
 
-        const result = hydrateChartConfig(config, data) as any;
-        expect(result.dataset.source[0]).toEqual(["vendas.empresa", "vendas.total"]);
+        const result = hydrateChartConfig(config, manifest) as any;
+        expect(result.dataset.source[0]).toEqual(["Category", "vendas.total - "]);
         expect(result.dataset.source[1]).toEqual(["Empresa A", 1000.50]);
         expect(result.dataset.source).toHaveLength(4); // header + 3 rows
     });
 
     it("handles multiple measure series", () => {
-        const multiCols = [
-            makeCol("vendas.empresa", 17),
-            makeCol("vendas.total", 15, TFieldType.ftFloat),
-            makeCol("vendas.qtd", 15, TFieldType.ftInteger),
-        ];
-        const multiData = makeData(multiCols, [
-            ["A", "100", "5"],
-            ["B", "200", "10"],
-        ]);
+        const multiManifest = makeManifest(
+            ["A", "B"],
+            [
+                { label: "vendas.total - ", data: [100, 200] },
+                { label: "vendas.qtd - ", data: [5, 10] },
+            ]
+        );
 
         const config = {
-            xAxis: { data: ["fake"] },
+            xAxis: { type: "category", data: ["fake"] },
             series: [
-                { id: "vendas.total", data: [1] },
-                { id: "vendas.qtd", data: [1] },
+                { name: "Total", data: [0] },
+                { name: "Qtd", data: [0] },
             ],
         };
 
-        const result = hydrateChartConfig(config, multiData) as any;
+        const result = hydrateChartConfig(config, multiManifest) as any;
         expect(result.series[0].data).toEqual([100, 200]);
         expect(result.series[1].data).toEqual([5, 10]);
     });
 
-    describe("fallback heuristic", () => {
-        const multiCols = [
+    it("adds missing series when LLM creates fewer than manifest", () => {
+        const multiManifest = makeManifest(
+            ["A", "B"],
+            [
+                { label: "Receita - ", data: [100, 200] },
+                { label: "Custo - ", data: [50, 80] },
+            ]
+        );
+
+        const config = {
+            xAxis: { type: "category", data: ["fake"] },
+            series: [{ name: "Total", type: "line", data: [0] }],
+        };
+
+        const result = hydrateChartConfig(config, multiManifest) as any;
+        expect(result.series).toHaveLength(2);
+        expect(result.series[1].name).toBe("Custo - ");
+        expect(result.series[1].data).toEqual([50, 80]);
+        expect(result.series[1].type).toBe("line");
+    });
+
+    it("truncates extra series when LLM creates more than manifest", () => {
+        const singleManifest = makeManifest(
+            ["A", "B"],
+            [{ label: "Total - ", data: [100, 200] }]
+        );
+
+        const config = {
+            xAxis: { type: "category", data: ["fake"] },
+            series: [
+                { name: "Total", data: [0] },
+                { name: "Extra", data: [0] },
+            ],
+        };
+
+        const result = hydrateChartConfig(config, singleManifest) as any;
+        expect(result.series).toHaveLength(1);
+        expect(result.series[0].name).toBe("Total - ");
+    });
+
+    it("handles series with unique IDs for ECharts transitions", () => {
+        const multiManifest = makeManifest(
+            ["A"],
+            [
+                { label: "Serie 1", data: [10] },
+                { label: "Serie 2", data: [20] },
+            ]
+        );
+
+        const config = {
+            xAxis: { type: "category", data: ["fake"] },
+            series: [
+                { name: "S1", data: [0] },
+                { name: "S2", data: [0] },
+            ],
+        };
+
+        const result = hydrateChartConfig(config, multiManifest) as any;
+        expect(result.series[0].id).toBe("series-0");
+        expect(result.series[1].id).toBe("series-1");
+    });
+});
+
+describe("buildChartDataManifest", () => {
+    it("builds manifest from PivotGridResponse and LLMQuery", () => {
+        const cols = [
             makeCol("vendas.empresa", 17),
             makeCol("vendas.total", 15, TFieldType.ftFloat),
-            makeCol("vendas.qtd", 15, TFieldType.ftInteger),
         ];
-        const multiData = makeData(multiCols, [
-            ["A", "100", "5"],
-            ["B", "200", "10"],
+        const data = makeData(cols, [
+            ["Empresa A", "1000"],
+            ["Empresa B", "2000"],
         ]);
 
-        it("assigns series without id positionally when counts match", () => {
-            const config = {
-                xAxis: { data: ["fake"] },
-                series: [
-                    { name: "Total", type: "bar", data: [1] },
-                    { name: "Qtd", type: "bar", data: [1] },
-                ],
-            };
+        const query: LLMQuery = {
+            calculatedFields: [],
+            categoryDimensions: [{ completeName: "vendas.empresa", title: "Empresa" }],
+            measures: [{ completeName: "vendas.total", aggregateFunction: "SUM", title: "Total" }],
+            filters: { completeName: "", filters: [], join: 0 as any, not: false, operator: 0 as any, values: [] },
+            havingFilters: { completeName: "", filters: [], join: 0 as any, aggregateFunction: "NONE", not: false, operator: 0 as any, values: [] },
+        };
 
-            const result = hydrateChartConfig(config, multiData) as any;
-            expect(result.series[0].id).toBe("vendas.total");
-            expect(result.series[0].data).toEqual([100, 200]);
-            expect(result.series[1].id).toBe("vendas.qtd");
-            expect(result.series[1].data).toEqual([5, 10]);
-        });
+        const manifest = buildChartDataManifest(data, query);
+        expect(manifest.labels).toEqual(["Empresa A", "Empresa B"]);
+        expect(manifest.datasets).toHaveLength(1);
+        expect(manifest.datasets[0]!.label).toBe("Total - ");
+        expect(manifest.datasets[0]!.data).toEqual([1000, 2000]);
+    });
 
-        it("matches series by name when counts differ", () => {
-            const config = {
-                xAxis: { data: ["fake"] },
-                series: [
-                    { name: "vendas.total", type: "bar", data: [1] },
-                ],
-            };
+    it("handles multiple measures with series dimensions", () => {
+        const cols = [
+            makeCol("vendas.empresa", 17),
+            makeCol("vendas.ano", 16),
+            makeCol("vendas.total", 15, TFieldType.ftFloat),
+        ];
+        const data = makeData(cols, [
+            ["Empresa A", "2024", "100"],
+            ["Empresa A", "2025", "150"],
+            ["Empresa B", "2024", "200"],
+            ["Empresa B", "2025", "250"],
+        ]);
 
-            const result = hydrateChartConfig(config, multiData) as any;
-            expect(result.series[0].id).toBe("vendas.total");
-            expect(result.series[0].data).toEqual([100, 200]);
-        });
+        const query: LLMQuery = {
+            calculatedFields: [],
+            categoryDimensions: [{ completeName: "vendas.empresa", title: "Empresa" }],
+            seriesDimensions: [{ completeName: "vendas.ano", title: "Ano" }],
+            measures: [{ completeName: "vendas.total", aggregateFunction: "SUM", title: "Total" }],
+            filters: { completeName: "", filters: [], join: 0 as any, not: false, operator: 0 as any, values: [] },
+            havingFilters: { completeName: "", filters: [], join: 0 as any, aggregateFunction: "NONE", not: false, operator: 0 as any, values: [] },
+        };
 
-        it("does not affect series with valid id", () => {
-            const config = {
-                xAxis: { data: ["fake"] },
-                series: [
-                    { id: "vendas.total", data: [1] },
-                    { name: "Qtd", type: "bar", data: [1] },
-                ],
-            };
-
-            const result = hydrateChartConfig(config, multiData) as any;
-            // id-matched series hydrated normally
-            expect(result.series[0].data).toEqual([100, 200]);
-            // single unmatched series, single unmatched measure → positional
-            expect(result.series[1].id).toBe("vendas.qtd");
-            expect(result.series[1].data).toEqual([5, 10]);
-        });
-
-        it("leaves unmatched series untouched when no name match and counts differ", () => {
-            const config = {
-                xAxis: { data: ["fake"] },
-                series: [
-                    { name: "Something Else", type: "bar", data: [42] },
-                ],
-            };
-
-            // 1 unmatched series vs 2 unmatched measures → counts differ, no name match
-            const result = hydrateChartConfig(config, multiData) as any;
-            expect(result.series[0].data).toEqual([42]);
-            expect(result.series[0].id).toBeUndefined();
-        });
+        const manifest = buildChartDataManifest(data, query);
+        expect(manifest.labels).toEqual(["Empresa A", "Empresa B"]);
+        expect(manifest.datasets).toHaveLength(2);
+        // transformToChartData sorts series alphabetically
+        expect(manifest.datasets[0]!.label).toBe("Total - 2024");
+        expect(manifest.datasets[0]!.data).toEqual([100, 200]);
+        expect(manifest.datasets[1]!.label).toBe("Total - 2025");
+        expect(manifest.datasets[1]!.data).toEqual([150, 250]);
     });
 });
 
 describe("buildDeveloperMessage", () => {
-    it("returns generic message when no executionData", () => {
+    it("returns generic message when no manifest", () => {
         const msg = buildDeveloperMessage();
         expect(msg).toContain("extract_data tool was called");
         expect(msg).not.toContain("CRITICAL");
     });
 
-    it("includes column info and examples for both axes and series", () => {
-        const cols = [
-            makeCol("vendas.empresa", 17),
-            makeCol("vendas.total", 15, TFieldType.ftFloat),
-        ];
-        const data = makeData(cols, [["A", "100"]]);
+    it("includes structural requirements when manifest is provided", () => {
+        const manifest = makeManifest(
+            ["Empresa A", "Empresa B"],
+            [
+                { label: "Total", data: [100, 200] },
+                { label: "Qtd", data: [5, 10] },
+            ]
+        );
 
-        const msg = buildDeveloperMessage(data);
-        expect(msg).toContain("CRITICAL");
-        expect(msg).toContain("vendas.empresa");
-        expect(msg).toContain("vendas.total");
-        expect(msg).toContain('"id": "vendas.total"');
-        expect(msg).toContain('"id": "vendas.empresa"');
-        expect(msg).toContain("Example axis structure");
-        expect(msg).toContain("Example series structure");
+        const msg = buildDeveloperMessage(manifest);
+        expect(msg).toContain("CRITICAL STRUCTURAL REQUIREMENTS");
+        expect(msg).toContain("exactly 2 series objects");
+        expect(msg).toContain("exactly 2 elements");
+        expect(msg).toContain('[0] "Total"');
+        expect(msg).toContain('[1] "Qtd"');
+        expect(msg).toContain("Empresa A");
+        expect(msg).not.toContain("completeName");
+        expect(msg).toContain("Do NOT set");
+    });
+
+    it("truncates long label lists with total count", () => {
+        const labels = Array.from({ length: 25 }, (_, i) => `Label ${i}`);
+        const manifest = makeManifest(labels, [{ label: "M1", data: new Array(25).fill(0) }]);
+
+        const msg = buildDeveloperMessage(manifest);
+        expect(msg).toContain("25 total");
     });
 });
