@@ -9,6 +9,7 @@ export function getRenderChartToolDefinition(): FunctionTool {
     name: "render_chart_config",
     description: description(
       "You are an Apache ECharts expert. The user will provide a data table and a visualization request. Your task is to generate ONLY a valid JSON object with the ECharts configuration (option).",
+      "If more than one series are specified and the values have different scales, ensure proper axis configuration.",
       "",
       "MANDATORY rules:",
       "- Create EXACTLY the number of series specified in the developer message, in the indicated order",

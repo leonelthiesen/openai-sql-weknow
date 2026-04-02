@@ -8,9 +8,10 @@ export function getExtractDataToolDefinition(): FunctionTool {
     type: "function",
     name: "extract_data",
     description: description(
-      "Extract and render data when the request is sufficiently specified.",
-      "The result is rendered as a chart with spreadsheet, a standalone spreadsheet, or a text summary depending on renderType.",
-      "Call this tool only if you can identify dimensions, measures, required filters, and aggregation intent without guessing.",
+      "You are a helpful assistant. Your task is to extract the user's data analysis intent and translate it into a structured query definition that can be executed against a virtual table.",
+      "The virtual table fields are defined in the conversation context.",
+      "You will receive as a result, an schema of the columns with a obfuscated data limited to 10 records, to help you understand the data types and values. Use this information to better infer the user's intent.",
+      "The result will be rendered as a chart with spreadsheet, a standalone spreadsheet, or a user friendly message depending on renderType.",
       "If any required detail is missing or ambiguous, call ask_followup instead.",
     ),
     parameters: {
@@ -46,17 +47,17 @@ export function getExtractDataToolDefinition(): FunctionTool {
         query: {
           type: "object",
           description: description(
-            "Query definitions: calculated fields, series dimensions, category dimensions, measures, sorting, pre-aggregation filters (WHERE), and post-aggregation filters (HAVING).",
-            "This query will not be shown to the user.",
-            "The data will be rendered separately right after your message.",
-            "When using recsMax for top/limit behavior, include a deterministic categorySort to avoid unstable results."
+            // "Query definitions: calculated fields, series dimensions, category dimensions, measures, sorting, pre-aggregation filters (WHERE), and post-aggregation filters (HAVING).",
+            "This query will not be displayed directly to the user.",
+            "The result data will be rendered (as table, chart or text) separately right after your message.",
+            "In general, do not repeat the same field in both seriesDimensions and categoryDimensions.",
+            "Always use sorting, either by category using 'categorySort' or by series using 'seriesSort'. Especially when 'recsMax' is used to handle a top/limit request.",
           ),
           properties: {
             calculatedFields: {
               type: "array",
               description: description(
-                "List of calculated fields (ANSI SQL expressions) that can be defined and used in",
-                "seriesDimensions, categoryDimensions, measures, sorting, filters, and havingFilters.",
+                "List of calculated fields (ANSI SQL expressions) that can be defined and used in seriesDimensions, categoryDimensions, measures, sorting, filters, and havingFilters.",
                 "A calculated field is effective only when referenced by its 'completeName' in those properties.",
                 "Use calculated fields when direct fields from the virtual table are not sufficient.",
                 "If a referenced calculated field has hasAggregateFunction=true, always set the reference aggregateFunction to NONE.",
@@ -77,7 +78,9 @@ export function getExtractDataToolDefinition(): FunctionTool {
                     type: "string",
                     description: description(
                       "ANSI SQL expression that can contain aggregation functions (SUM, COUNT, AVG, etc.).",
-                      "Provided fields can be referenced by the 'completeName' between '%', for example: '%$completeName%'.",
+                      "Provided fields can be referenced in formula, always by the 'completeName' between '%', for example: ",
+                      "- field name: userName, reference '%userName%'",
+                      "- field name: id, reference '%id%'",
                       "Only use provided fields directly in the formula; do not reference another calculated field here.",
                     ),
                   },
@@ -144,7 +147,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
                   direction: { $ref: "#/$defs/TSortDirection" },
                   aggregateFunction: { $ref: "#/$defs/TAggregateFunction" },
                 },
-                required: ["completeName", "direction", "aggregateFunction"],
+                required: ["completeName", "aggregateFunction"],
                 additionalProperties: false,
               },
             },
@@ -191,7 +194,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
                   direction: { $ref: "#/$defs/TSortDirection" },
                   aggregateFunction: { $ref: "#/$defs/TAggregateFunction" },
                 },
-                required: ["completeName", "direction", "aggregateFunction"],
+                required: ["completeName", "aggregateFunction"],
                 additionalProperties: false,
               },
             },
@@ -226,8 +229,8 @@ export function getExtractDataToolDefinition(): FunctionTool {
                 additionalProperties: false,
               },
             },
-            filters: { $ref: "#/$defs/TWhereFilters" },
-            havingFilters: { $ref: "#/$defs/THavingFilters" },
+            filters: { $ref: "#/$defs/TWhereFiltersRoot" },
+            havingFilters: { $ref: "#/$defs/THavingFiltersRoot" },
             recsMax: {
               type: "number",
               description: description(
@@ -247,33 +250,15 @@ export function getExtractDataToolDefinition(): FunctionTool {
         TAggregateFunction: {
           type: "string",
           description: description(
-            "Enum for SQL-like aggregation functions.",
+            "SQL aggregation functions.",
             "Use NONE when referencing a calculated field with hasAggregateFunction=true.",
           ),
-          enum: ["NONE", "COUNT", "COUNT_DISTINCT", "SUM", "MAX", "MIN", "AVG", "LIST", "LIST_DISTINCT", "SUM_DISTINCT", "AVG_DISTINCT"],
-          oneOf: [
-            { const: "NONE", title: "NONE", description: "No aggregation function" },
-            { const: "COUNT", title: "COUNT", description: "Count function" },
-            { const: "COUNT_DISTINCT", title: "COUNT_DISTINCT", description: "Distinct count function" },
-            { const: "SUM", title: "SUM", description: "Sum function" },
-            { const: "MAX", title: "MAX", description: "Max function" },
-            { const: "MIN", title: "MIN", description: "Min function" },
-            { const: "AVG", title: "AVG", description: "Average function" },
-            { const: "LIST", title: "LIST", description: "List function" },
-            { const: "LIST_DISTINCT", title: "LIST_DISTINCT", description: "Distinct list function" },
-            { const: "SUM_DISTINCT", title: "SUM_DISTINCT", description: "Distinct sum function" },
-            { const: "AVG_DISTINCT", title: "AVG_DISTINCT", description: "Distinct average function" },
-          ],
+          enum: ["NONE", "COUNT", "COUNT_DISTINCT", "SUM", "MAX", "MIN", "AVG", "LIST", "LIST_DISTINCT", "SUM_DISTINCT", "AVG_DISTINCT"]
         },
         TSortDirection: {
-          type: "number",
-          description: "Enum for sort direction",
-          enum: [0, 1, 2],
-          oneOf: [
-            { const: 0, title: "sdAsc", description: "Ascending order" },
-            { const: 1, title: "sdDesc", description: "Descending order" },
-            { const: 2, title: "sdNone", description: "No sorting" },
-          ],
+          type: "string",
+          description: "Enum for sort direction.",
+          enum: ["ASC", "DESC"],
         },
         TBooleanOperator: {
           type: "number",
@@ -285,23 +270,9 @@ export function getExtractDataToolDefinition(): FunctionTool {
           ],
         },
         TComparisonOperator: {
-          type: "number",
-          description: "Enum for comparison operators",
-          enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-          oneOf: [
-            { const: 0, title: "coLike", description: "LIKE operator" },
-            { const: 1, title: "coEqual", description: "Equals operator (=)" },
-            { const: 2, title: "coDifferent", description: "Not equals operator (!=)" },
-            { const: 3, title: "coBiggerThan", description: "Greater than operator (>)" },
-            { const: 4, title: "coBiggerOrEqualThan", description: "Greater than or equal operator (>=)" },
-            { const: 5, title: "coLowerThan", description: "Less than operator (<)" },
-            { const: 6, title: "coLowerOrEqualThan", description: "Less than or equal operator (<=)" },
-            { const: 7, title: "coStartsWith", description: "Starts with operator" },
-            { const: 8, title: "coEndsWith", description: "Ends with operator" },
-            { const: 9, title: "coIn", description: "IN operator" },
-            { const: 10, title: "coBetween", description: "BETWEEN operator" },
-            { const: 11, title: "coIsNull", description: "IS NULL operator" },
-          ],
+          type: "string",
+          description: "SQL comparison operators in text form.",
+          enum: ["LIKE", "=", "!=", ">", ">=", "<", "<=", "IN", "BETWEEN", "IS_NULL", "STARTS_WITH", "ENDS_WITH"],
         },
         TCalculatedFieldType: {
           type: "number",
@@ -309,12 +280,28 @@ export function getExtractDataToolDefinition(): FunctionTool {
           enum: [1, 3, 6, 9, 10, 11],
           oneOf: [
             { const: 1, title: "ftString", description: "String" },
-            { const: 3, title: "ftInteger", description: "Integer" },
             { const: 6, title: "ftFloat", description: "Float" },
             { const: 9, title: "ftDate", description: "Date" },
             { const: 10, title: "ftTime", description: "Time" },
             { const: 11, title: "ftDateTime", description: "DateTime" },
           ],
+        },
+        TWhereFiltersRoot: {
+          type: "object",
+          description: description(
+            "Root WHERE filter group.",
+            "At the root level, use only join + filters.",
+          ),
+          properties: {
+            filters: {
+              type: "array",
+              items: { $ref: "#/$defs/TWhereFilters" },
+              description: "Root list of WHERE filter nodes",
+            },
+            join: { $ref: "#/$defs/TBooleanOperator" },
+          },
+          required: ["join", "filters"],
+          additionalProperties: false,
         },
         TWhereFilters: {
           type: "object",
@@ -322,37 +309,72 @@ export function getExtractDataToolDefinition(): FunctionTool {
             "Definitions for WHERE filters (pre-aggregation), recursively nestable for complex conditions.",
             "Use WHERE for row-level filtering before any aggregation.",
           ),
-          properties: {
-            completeName: {
-              type: "string",
-              description: description(
-                "Use the 'completeName' from the provided fields or calculated fields.",
-                "If this references a calculated field with hasAggregateFunction=true, move the condition to havingFilters instead of filters.",
-              ),
+          oneOf: [
+            {
+              type: "object",
+              description: "Nested WHERE group node",
+              properties: {
+                filters: {
+                  type: "array",
+                  items: { $ref: "#/$defs/TWhereFilters" },
+                  description: "Recursive list for nested filters",
+                },
+                join: { $ref: "#/$defs/TBooleanOperator" },
+              },
+              required: ["join", "filters"],
+              additionalProperties: false,
             },
+            {
+              type: "object",
+              description: "WHERE condition node",
+              properties: {
+                completeName: {
+                  type: "string",
+                  description: description(
+                    "Use the 'completeName' from the provided fields or calculated fields.",
+                    "If this references a calculated field with hasAggregateFunction=true, move the condition to havingFilters instead of filters.",
+                  ),
+                },
+                filters: {
+                  type: "array",
+                  items: { $ref: "#/$defs/TWhereFilters" },
+                  description: "Recursive list for nested filters",
+                },
+                join: { $ref: "#/$defs/TBooleanOperator" },
+                not: {
+                  type: "boolean",
+                  description: description(
+                    "Indicates whether the filter condition should be negated",
+                  ),
+                },
+                operator: { $ref: "#/$defs/TComparisonOperator" },
+                values: { $ref: "#/$defs/TValues" },
+              },
+              required: [
+                "completeName",
+                "join",
+                "operator",
+                "values",
+              ],
+              additionalProperties: false,
+            },
+          ],
+        },
+        THavingFiltersRoot: {
+          type: "object",
+          description: description(
+            "Root HAVING filter group.",
+            "At the root level, use only join + filters.",
+          ),
+          properties: {
             filters: {
               type: "array",
-              items: { $ref: "#/$defs/TWhereFilters" },
-              description: "Recursive list for nested filters",
+              items: { $ref: "#/$defs/THavingFilters" },
+              description: "Root list of HAVING filter nodes",
             },
             join: { $ref: "#/$defs/TBooleanOperator" },
-            not: {
-              type: "boolean",
-              description: description(
-                "Indicates whether the filter condition should be negated",
-              ),
-            },
-            operator: { $ref: "#/$defs/TComparisonOperator" },
-            values: { $ref: "#/$defs/TValues" },
           },
-          required: [
-            "completeName",
-            "filters",
-            "join",
-            "not",
-            "operator",
-            "values",
-          ],
+          required: ["join", "filters"],
           additionalProperties: false,
         },
         THavingFilters: {
@@ -361,40 +383,58 @@ export function getExtractDataToolDefinition(): FunctionTool {
             "Definitions for HAVING filters (post-aggregation), recursively nestable for complex conditions.",
             "Use HAVING when filtering aggregated values (SUM, COUNT, AVG, etc.).",
           ),
-          properties: {
-            completeName: {
-              type: "string",
-              description: description(
-                "Use the 'completeName' from the provided fields or calculated fields.",
-                "For calculated fields with hasAggregateFunction=true, set aggregateFunction to NONE.",
-              ),
+          oneOf: [
+            {
+              type: "object",
+              description: "Nested HAVING group node",
+              properties: {
+                filters: {
+                  type: "array",
+                  items: { $ref: "#/$defs/THavingFilters" },
+                  description: "Recursive list for nested filters",
+                },
+                join: { $ref: "#/$defs/TBooleanOperator" },
+              },
+              required: ["join", "filters"],
+              additionalProperties: false,
             },
-            filters: {
-              type: "array",
-              items: { $ref: "#/$defs/THavingFilters" },
-              description: "Recursive list for nested filters",
+            {
+              type: "object",
+              description: "HAVING condition node",
+              properties: {
+                completeName: {
+                  type: "string",
+                  description: description(
+                    "Use the 'completeName' from the provided fields or calculated fields.",
+                    "For calculated fields with hasAggregateFunction=true, set aggregateFunction to NONE.",
+                  ),
+                },
+                filters: {
+                  type: "array",
+                  items: { $ref: "#/$defs/THavingFilters" },
+                  description: "Recursive list for nested filters",
+                },
+                join: { $ref: "#/$defs/TBooleanOperator" },
+                aggregateFunction: { $ref: "#/$defs/TAggregateFunction" },
+                not: {
+                  type: "boolean",
+                  description: description(
+                    "Indicates whether the filter condition should be negated",
+                  ),
+                },
+                operator: { $ref: "#/$defs/TComparisonOperator" },
+                values: { $ref: "#/$defs/TValues" },
+              },
+              required: [
+                "completeName",
+                "join",
+                "aggregateFunction",
+                "operator",
+                "values",
+              ],
+              additionalProperties: false,
             },
-            join: { $ref: "#/$defs/TBooleanOperator" },
-            aggregateFunction: { $ref: "#/$defs/TAggregateFunction" },
-            not: {
-              type: "boolean",
-              description: description(
-                "Indicates whether the filter condition should be negated",
-              ),
-            },
-            operator: { $ref: "#/$defs/TComparisonOperator" },
-            values: { $ref: "#/$defs/TValues" },
-          },
-          required: [
-            "completeName",
-            "filters",
-            "join",
-            "aggregateFunction",
-            "not",
-            "operator",
-            "values",
           ],
-          additionalProperties: false,
         },
         TValues: {
           type: "array",

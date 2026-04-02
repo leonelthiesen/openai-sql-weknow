@@ -1,5 +1,33 @@
 import { LLMQuery } from "../models/llm-structured-output.models";
-import { PivotGridResponse, RowKey } from "../types/pivot-grid-response.types";
+import { PivotGridCellValue, PivotGridResponse, RowKey } from "../types/pivot-grid-response.types";
+
+function toDisplayValue(value: PivotGridCellValue | undefined): string {
+    if (value == null) {
+        return "";
+    }
+    return String(value);
+}
+
+function toNumericValue(value: PivotGridCellValue | undefined): number | null {
+    if (value == null || value === "") {
+        return 0;
+    }
+
+    if (typeof value === "number") {
+        return Number.isNaN(value) ? null : value;
+    }
+
+    if (typeof value === "boolean") {
+        return value ? 1 : 0;
+    }
+
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+function formatMeasureSeriesLabel(measureTitle: string, seriesKey: string): string {
+    return seriesKey ? `${measureTitle} - ${seriesKey}` : measureTitle;
+}
 
 /**
  * Gera um CSV pivotado a partir dos dados brutos e da configuração de visualização.
@@ -31,20 +59,19 @@ export function generatePivotCSV(apiResponse: PivotGridResponse, queryConfig: LL
 
     for (const row of apiResponse.rows) {
         // Construir chave da categoria (concatenação dos valores das dimensões)
-        const categoryValues = categoryKeys.map(key => row[key] ?? '');
+        const categoryValues = categoryKeys.map(key => toDisplayValue(row[key]));
         const categoryKey = categoryValues.join(' | ');
 
         // Construir chave da série (concatenação dos valores das dimensões de série)
-        const seriesValues = seriesKeys.map(key => row[key] ?? '');
+        const seriesValues = seriesKeys.map(key => toDisplayValue(row[key]));
         const seriesKey = seriesValues.join(' | ');
 
         // Para cada medida, combinar com a série para formar uma coluna
         for (const measure of measureItems) {
-            const columnKey = `${measure.title} - ${seriesKey}`; // ou outra formatação desejada
+            const columnKey = formatMeasureSeriesLabel(measure.title, seriesKey);
 
-            const valueStr = row[measure.key];
-            const value = parseFloat(valueStr ?? '0');
-            if (isNaN(value)) continue;
+            const value = toNumericValue(row[measure.key]);
+            if (value == null) continue;
 
             if (!pivotData.has(categoryKey)) {
                 pivotData.set(categoryKey, new Map());

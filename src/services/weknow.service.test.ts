@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { config as loadEnv } from "dotenv";
+import { TFieldType } from "../models/TFieldType";
 
 const mockEnv = {
   WEKNOW_API_HOST: "test-host",
@@ -293,6 +294,133 @@ describe("executeComponent", () => {
         headers: { "Content-Type": "application/json" },
       })
     );
+  });
+});
+
+// ── executePivotGridComponent ───────────────────────────────────────────────
+
+describe("executePivotGridComponent", () => {
+  let mockFetch: Mock;
+
+  beforeEach(async () => {
+    setupEnv();
+    vi.resetModules();
+    mockFetch = vi.fn();
+    await setupMocks(mockFetch);
+  });
+
+  afterEach(teardownEnv);
+
+  test("normaliza rows com base no dataType da coluna", async () => {
+    const mockResult = {
+      cols: [
+        {
+          completeName: "valor",
+          dataType: TFieldType.ftFloat,
+          section: 15,
+          header: { caption: "Valor" },
+          expanded: false,
+          wordWrap: false,
+          visible: true,
+        },
+        {
+          completeName: "ativo",
+          dataType: TFieldType.ftBoolean,
+          section: 17,
+          header: { caption: "Ativo" },
+          expanded: false,
+          wordWrap: false,
+          visible: true,
+        },
+        {
+          completeName: "data_evento",
+          dataType: TFieldType.ftDateTime,
+          section: 17,
+          header: { caption: "Data" },
+          expanded: false,
+          wordWrap: false,
+          visible: true,
+        },
+      ],
+      rows: [
+        { d1: "1.234,56", d2: "sim", d3: "2025-01-15 10:30:00" },
+      ],
+      totals: { internalValues: [], displayValues: [], formattings: [], valueFormattings: [] },
+      formattings: [],
+      valueFormattings: [],
+      showRecordCount: false,
+      showRowTitle: false,
+      showColumnTitle: false,
+      showDataTitle: false,
+      metaValues: [],
+      dataInfo: { source: 0, dateTime: "2025-01-01" },
+      showSubtotalColumn: false,
+      showSubtotalRow: false,
+      showGrandTotalColumn: false,
+      showGrandTotalRow: false,
+      serverInfo: { version: "1.0" },
+    };
+
+    mockFetch.mockResolvedValue(createFetchResponse(mockResult));
+
+    const body = JSON.stringify({ contents: { version: "5.2.1", type: 3 }, accessToken: "my-token" });
+    const { executePivotGridComponent } = await import("./weknow.service");
+    const result = await executePivotGridComponent(body);
+
+    expect(result.rows[0]!.d1).toBe(1234.56);
+    expect(result.rows[0]!.d2).toBe(true);
+    expect(result.rows[0]!.d3).toBe(new Date("2025-01-15 10:30:00").toISOString());
+  });
+
+  test("preserva valor original quando conversao por dataType falha", async () => {
+    const mockResult = {
+      cols: [
+        {
+          completeName: "valor",
+          dataType: TFieldType.ftFloat,
+          section: 15,
+          header: { caption: "Valor" },
+          expanded: false,
+          wordWrap: false,
+          visible: true,
+        },
+        {
+          completeName: "ativo",
+          dataType: TFieldType.ftBoolean,
+          section: 17,
+          header: { caption: "Ativo" },
+          expanded: false,
+          wordWrap: false,
+          visible: true,
+        },
+      ],
+      rows: [
+        { d1: "abc", d2: "talvez" },
+      ],
+      totals: { internalValues: [], displayValues: [], formattings: [], valueFormattings: [] },
+      formattings: [],
+      valueFormattings: [],
+      showRecordCount: false,
+      showRowTitle: false,
+      showColumnTitle: false,
+      showDataTitle: false,
+      metaValues: [],
+      dataInfo: { source: 0, dateTime: "2025-01-01" },
+      showSubtotalColumn: false,
+      showSubtotalRow: false,
+      showGrandTotalColumn: false,
+      showGrandTotalRow: false,
+      serverInfo: { version: "1.0" },
+    };
+
+    mockFetch.mockResolvedValue(createFetchResponse(mockResult));
+
+    const body = JSON.stringify({ contents: { version: "5.2.1", type: 3 }, accessToken: "my-token" });
+    const { executePivotGridComponent } = await import("./weknow.service");
+    const result = await executePivotGridComponent(body);
+
+    expect(result.rows[0]!.d1).toBe("abc");
+    expect(result.rows[0]!.d2).toBe("talvez");
   });
 });
 

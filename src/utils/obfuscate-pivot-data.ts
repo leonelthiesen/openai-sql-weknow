@@ -1,6 +1,7 @@
 import { faker } from "@faker-js/faker";
 import { TFieldType } from "../models/TFieldType";
 import type {
+    PivotGridCellValue,
     PivotGridResponse,
     PivotGridColumn,
     PivotGridRow,
@@ -179,6 +180,13 @@ function csvEscape(value: string): string {
     return value;
 }
 
+function toCellString(value: PivotGridCellValue | undefined): string {
+    if (value == null) {
+        return "";
+    }
+    return String(value);
+}
+
 function buildObfuscatedCsv(
     rows: PivotGridRow[],
     cols: PivotGridColumn[],
@@ -191,9 +199,9 @@ function buildObfuscatedCsv(
     const dataRows = rows.slice(0, maxRows).map((row) => {
         return cols
             .map((_, i) => {
-                let dataIndex = i + 1; // Data fields are d1, d2, ...
-                const rawValue = row[`d${dataIndex}` as `d${number}`] ?? "";
-                const obfuscated = obfuscator.obfuscate(rawValue, dataIndex, columnTypes[dataIndex]!);
+                const dataIndex = i + 1; // Data fields are d1, d2, ...
+                const rawValue = toCellString(row[`d${dataIndex}` as `d${number}`]);
+                const obfuscated = obfuscator.obfuscate(rawValue, dataIndex, columnTypes[i]!);
                 return csvEscape(obfuscated);
             })
             .join(",");
@@ -281,7 +289,7 @@ export function buildDataSummary(data: PivotGridResponse, pivotCsv?: string): st
 
         parts.push(
             "",
-            "## Sample Data CSV (first 10 rows, obfuscated)",
+            "## OBFUSCATED Sample Data CSV (limited to 10 rows)",
             csvContent,
         );
     }

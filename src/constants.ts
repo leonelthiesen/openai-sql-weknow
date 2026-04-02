@@ -22,13 +22,13 @@ Always explain in a way that a non-technical user can understand.
 - Use WHERE filters for row-level filtering before aggregation.
 - Use HAVING filters for post-aggregation filtering.
 - If a calculated field has aggregation, reference it with aggregateFunction = NONE.
-- For top/limit requests, apply deterministic sort and recsMax together.
 
 ## Render policy
 
 - Prefer CHART if the resulting query allows it.
 - Use TEXT only for scalar/single-value answers.
 - Use TABLE only when user asks for a table view or a list and when it clearly improves interpretation.
+- For TEXT, after extract_data succeeds, call extract_text_values to capture values and then produce the final user-facing message from those values.
 
 ## Failure and retry policy
 
@@ -47,6 +47,7 @@ export interface ExtractDataResponse {
   userMessageSuggestions: string[];
   query: object;
   chartConfig?: object;
+  conversationNameSuggestion?: string;
 }
 
 export interface MetadataField {
@@ -58,6 +59,7 @@ export interface AskFollowupResponse {
   action: "FOLLOWUP_NEEDED";
   message: string;
   userMessageSuggestions: string[];
+  conversationNameSuggestion?: string;
 }
 
 export type OpenAIResponseSchema = ExtractDataResponse | AskFollowupResponse;

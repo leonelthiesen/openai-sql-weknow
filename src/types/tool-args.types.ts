@@ -21,4 +21,23 @@ export interface RenderChartArgs {
     chartConfig: object;
 }
 
-export type ParsedToolArgs = ExtractDataArgs | AskFollowupArgs | RenderChartArgs;
+export type TextValuePrimitive = string | number | boolean;
+
+export interface TextValueObject {
+    label?: string;
+    value: TextValuePrimitive | null;
+    unit?: string;
+}
+
+export type TextValueItem = TextValuePrimitive | TextValueObject;
+
+export interface ExtractTextValuesArgs {
+    toolName: "extract_text_values";
+    values: TextValueItem[];
+}
+
+export type ParsedToolArgs =
+    | ExtractDataArgs
+    | AskFollowupArgs
+    | RenderChartArgs
+    | ExtractTextValuesArgs;

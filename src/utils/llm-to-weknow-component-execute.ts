@@ -1,8 +1,18 @@
-import { LLMAggregateFunction, LLMHavingFilters, LLMStructuredOutput, LLMWhereFilters } from "../models/llm-structured-output.models";
-import { TComponentApi_TExecutePivotTableCustomInput, TCustomFilterValueMode, TCustomHavingFilter, TCustomWhereFilter } from "../models/dashboard-object-dto-custom.models";
+import {
+    LLMAggregateFunction,
+    LLMHavingFilterCondition,
+    LLMComparisonOperator,
+    LLMWhereFilterCondition,
+    LLMHavingFilters,
+    LLMStructuredOutput,
+    LLMWhereFilters,
+} from "../models/llm-structured-output.models";
+import { TComponentApi_TExecutePivotTableCustomInput, TCustomFilterValueMode, TCustomHavingFilter, TCustomHavingFilterRoot, TCustomWhereFilter, TCustomWhereFilterRoot } from "../models/dashboard-object-dto-custom.models";
 import { TGridBaseType } from "../models/TGridBaseType";
 import { TComponentType } from "../models/TComponentType";
+import { TComparisonOperator } from "../models/TComparisonOperator";
 import { TMeasureFunction } from "../models/TMeasureFunction";
+import { TSortDirection } from "../models/TSortDirection";
 
 function toMeasureFunction (aggregateFunction: LLMAggregateFunction): TMeasureFunction {
     switch (aggregateFunction) {
@@ -35,63 +45,175 @@ function toMeasureFunction (aggregateFunction: LLMAggregateFunction): TMeasureFu
     }
 }
 
+function toComparisonOperator (comparisonOperator: LLMComparisonOperator): TComparisonOperator {
+    switch (comparisonOperator) {
+        case "LIKE":
+            return TComparisonOperator.coLike;
+        case "=":
+            return TComparisonOperator.coEqual;
+        case "!=":
+            return TComparisonOperator.coDifferent;
+        case ">":
+            return TComparisonOperator.coBiggerThan;
+        case ">=":
+            return TComparisonOperator.coBiggerOrEqualThan;
+        case "<":
+            return TComparisonOperator.coLowerThan;
+        case "<=":
+            return TComparisonOperator.coLowerOrEqualThan;
+        case "STARTS_WITH":
+            return TComparisonOperator.coStartsWith;
+        case "ENDS_WITH":
+            return TComparisonOperator.coEndsWith;
+        case "IN":
+            return TComparisonOperator.coIn;
+        case "BETWEEN":
+            return TComparisonOperator.coBetween;
+        case "IS_NULL":
+            return TComparisonOperator.coIsNull;
+        default: {
+            const exhaustiveCheck: never = comparisonOperator;
+            throw new Error(`Unsupported comparisonOperator: ${String(exhaustiveCheck)}`);
+        }
+    }
+}
+
+function toSortDirection(direction: unknown): TSortDirection {
+    switch (direction) {
+        case "ASC":
+            return TSortDirection.sdAsc;
+        case "DESC":
+            return TSortDirection.sdDesc;
+        default:
+            return TSortDirection.sdNone;
+    }
+}
+
 /**
  * Converte LLMWhereFilters para TCustomWhereFilter
  */
-function convertWhereFilters (llmFilters: LLMWhereFilters): TCustomWhereFilter | undefined {
-    if (!llmFilters || !llmFilters.completeName) {
+function convertWhereFilterNode (llmFilters: LLMWhereFilters): TCustomWhereFilter | undefined {
+    if (!llmFilters || typeof llmFilters !== "object") {
         return undefined;
     }
 
+    if (!("completeName" in llmFilters)) {
+        const childFilters = Array.isArray(llmFilters.filters)
+            ? llmFilters.filters
+                .map(f => convertWhereFilterNode(f))
+                .filter(f => f !== undefined) as TCustomWhereFilter[]
+            : [];
+
+        return {
+            join: llmFilters.join,
+            filters: childFilters,
+        };
+    }
+
+    const condition = llmFilters as LLMWhereFilterCondition;
+
     const filter: TCustomWhereFilter = {
-        completeName: llmFilters.completeName,
-        join: llmFilters.join,
-        not: llmFilters.not,
-        operator: llmFilters.operator,
+        completeName: condition.completeName,
+        join: condition.join,
+        not: condition.not,
+        operator: toComparisonOperator(condition.operator),
     };
 
-    if (llmFilters.values && llmFilters.values.length > 0) {
+    if (condition.values && condition.values.length > 0) {
         filter.values = {
-            fixedValues: llmFilters.values,
+            fixedValues: condition.values,
             mode: TCustomFilterValueMode.fvmFixed
         };
     }
 
-    if (llmFilters.filters && llmFilters.filters.length > 0) {
-        filter.filters = llmFilters.filters.map(f => convertWhereFilters(f)).filter(f => f !== undefined) as TCustomWhereFilter[];
+    if (condition.filters && condition.filters.length > 0) {
+        filter.filters = condition.filters
+            .map(f => convertWhereFilterNode(f))
+            .filter(f => f !== undefined) as TCustomWhereFilter[];
     }
 
     return filter;
 }
 
-/**
- * Converte LLMHavingFilters para TCustomHavingFilter
- */
-function convertHavingFilters (llmFilters: LLMHavingFilters): TCustomHavingFilter | undefined {
-    if (!llmFilters || !llmFilters.completeName) {
+function convertWhereFiltersRoot (llmFilters: LLMWhereFilters): TCustomWhereFilterRoot | undefined {
+    if (!llmFilters || typeof llmFilters !== "object") {
         return undefined;
     }
 
-    const filter: TCustomHavingFilter = {
-        completeName: llmFilters.completeName,
+    if (!Array.isArray(llmFilters.filters)) {
+        return undefined;
+    }
+
+    return {
         join: llmFilters.join,
-        not: llmFilters.not,
-        operator: llmFilters.operator,
-        measureFunction: toMeasureFunction(llmFilters.aggregateFunction),
+        filters: llmFilters.filters
+            .map(f => convertWhereFilterNode(f))
+            .filter(f => f !== undefined) as TCustomWhereFilter[],
+    };
+}
+
+/**
+ * Converte LLMHavingFilters para TCustomHavingFilter
+ */
+function convertHavingFilterNode (llmFilters: LLMHavingFilters): TCustomHavingFilter | undefined {
+    if (!llmFilters || typeof llmFilters !== "object") {
+        return undefined;
+    }
+
+    if (!("completeName" in llmFilters)) {
+        const childFilters = Array.isArray(llmFilters.filters)
+            ? llmFilters.filters
+                .map(f => convertHavingFilterNode(f))
+                .filter(f => f !== undefined) as TCustomHavingFilter[]
+            : [];
+
+        return {
+            join: llmFilters.join,
+            filters: childFilters,
+        };
+    }
+
+    const condition = llmFilters as LLMHavingFilterCondition;
+
+    const filter: TCustomHavingFilter = {
+        completeName: condition.completeName,
+        join: condition.join,
+        not: condition.not,
+        operator: toComparisonOperator(condition.operator),
+        measureFunction: toMeasureFunction(condition.aggregateFunction),
     };
 
-    if (llmFilters.values && llmFilters.values.length > 0) {
+    if (condition.values && condition.values.length > 0) {
         filter.values = {
-            fixedValues: llmFilters.values,
+            fixedValues: condition.values,
             mode: TCustomFilterValueMode.fvmFixed
         };
     }
 
-    if (llmFilters.filters && llmFilters.filters.length > 0) {
-        filter.filters = llmFilters.filters.map(f => convertHavingFilters(f)).filter(f => f !== undefined) as TCustomHavingFilter[];
+    if (condition.filters && condition.filters.length > 0) {
+        filter.filters = condition.filters
+            .map(f => convertHavingFilterNode(f))
+            .filter(f => f !== undefined) as TCustomHavingFilter[];
     }
 
     return filter;
+}
+
+function convertHavingFiltersRoot (llmFilters: LLMHavingFilters): TCustomHavingFilterRoot | undefined {
+    if (!llmFilters || typeof llmFilters !== "object") {
+        return undefined;
+    }
+
+    if (!Array.isArray(llmFilters.filters)) {
+        return undefined;
+    }
+
+    return {
+        join: llmFilters.join,
+        filters: llmFilters.filters
+            .map(f => convertHavingFilterNode(f))
+            .filter(f => f !== undefined) as TCustomHavingFilter[],
+    };
 }
 
 /**
@@ -161,7 +283,7 @@ export function transformLLMToComponentExecuteInput (
         .filter(s => s.completeName)
         .map(s => ({
             completeName: s.completeName,
-            direction: s.direction,
+            direction: toSortDirection(s.direction),
             measureFunction: toMeasureFunction(s.aggregateFunction),
         }));
 
@@ -170,13 +292,13 @@ export function transformLLMToComponentExecuteInput (
         .filter(s => s.completeName)
         .map(s => ({
             completeName: s.completeName,
-            direction: s.direction,
+            direction: toSortDirection(s.direction),
             measureFunction: toMeasureFunction(s.aggregateFunction),
         }));
 
     // Converte os filtros
-    const whereFilters = query.filters ? convertWhereFilters(query.filters) : undefined;
-    const havingFilters = query.havingFilters ? convertHavingFilters(query.havingFilters) : undefined;
+    const whereFilters = query.filters ? convertWhereFiltersRoot(query.filters) : undefined;
+    const havingFilters = query.havingFilters ? convertHavingFiltersRoot(query.havingFilters) : undefined;
 
     // Monta o objeto final (pivot table)
     const executeInput: TComponentApi_TExecutePivotTableCustomInput = {

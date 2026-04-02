@@ -125,8 +125,8 @@ export function hydrateChartConfig(
 
 export function buildDeveloperMessage(manifest?: ChartDataManifest): string {
     const lines = [
-        "The extract_data tool was called and CSV sample data are provided.",
-        "Use this CSV data and the user's request to render an appropriate chart configuration.",
+        "The query was executed and column schema with OBFUSCATED CSV sample data are provided.",
+        "Use the schema and OBFUSCATED CSV data with the user's request to render an appropriate chart configuration.",
     ];
 
     if (manifest && manifest.datasets.length > 0) {

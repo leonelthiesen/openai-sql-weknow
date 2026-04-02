@@ -104,7 +104,7 @@ describe("transformToChartData", () => {
 
             expect(result.labels).toEqual(["Produto A", "Produto B"]);
             expect(result.datasets).toHaveLength(1);
-            expect(result.datasets[0].label).toBe("Total - ");
+            expect(result.datasets[0].label).toBe("Total");
             expect(result.datasets[0].data).toEqual([100, 200]);
         });
 
@@ -124,7 +124,7 @@ describe("transformToChartData", () => {
             expect(result.datasets).toEqual([]);
         });
 
-        it("labels are sorted alphabetically", () => {
+        it("preserves labels order from query result rows", () => {
             const cols = [
                 makeCol({ completeName: "animal.nome" }),
                 makeCol({ completeName: "animal.peso" }),
@@ -141,8 +141,8 @@ describe("transformToChartData", () => {
 
             const result = transformToChartData(makeResponse(rows, cols), query);
 
-            expect(result.labels).toEqual(["Apple", "Mango", "Zebra"]);
-            expect(result.datasets[0].data).toEqual([100, 200, 300]);
+            expect(result.labels).toEqual(["Zebra", "Apple", "Mango"]);
+            expect(result.datasets[0].data).toEqual([300, 100, 200]);
         });
     });
 
@@ -257,7 +257,7 @@ describe("transformToChartData", () => {
             expect(result.datasets[0].label).toBe("Val - 2024 | Q1");
         });
 
-        it("seriesDimensions undefined yields single dataset with empty series suffix", () => {
+        it("seriesDimensions undefined yields single dataset with measure title only", () => {
             const cols = [makeCol({ completeName: "cat" }), makeCol({ completeName: "val" })];
             const rows = [{ d1: "A", d2: "5" }];
             const query = makeQuery({
@@ -269,10 +269,10 @@ describe("transformToChartData", () => {
             const result = transformToChartData(makeResponse(rows, cols), query);
 
             expect(result.datasets).toHaveLength(1);
-            expect(result.datasets[0].label).toBe("Val - ");
+            expect(result.datasets[0].label).toBe("Val");
         });
 
-        it("empty seriesDimensions array yields single dataset with empty series suffix", () => {
+        it("empty seriesDimensions array yields single dataset with measure title only", () => {
             const cols = [makeCol({ completeName: "cat" }), makeCol({ completeName: "val" })];
             const rows = [{ d1: "A", d2: "5" }];
             const query = makeQuery({
@@ -284,7 +284,7 @@ describe("transformToChartData", () => {
             const result = transformToChartData(makeResponse(rows, cols), query);
 
             expect(result.datasets).toHaveLength(1);
-            expect(result.datasets[0].label).toBe("Val - ");
+            expect(result.datasets[0].label).toBe("Val");
         });
 
         it("fills 0 for missing category+series combinations", () => {
@@ -336,8 +336,8 @@ describe("transformToChartData", () => {
             const result = transformToChartData(makeResponse(rows, cols), query);
 
             expect(result.datasets).toHaveLength(2);
-            expect(result.datasets[0]).toEqual({ label: "Receita - ", data: [100, 200] });
-            expect(result.datasets[1]).toEqual({ label: "Custo - ", data: [40, 80] });
+            expect(result.datasets[0]).toEqual({ label: "Receita", data: [100, 200] });
+            expect(result.datasets[1]).toEqual({ label: "Custo", data: [40, 80] });
         });
 
         it("creates datasets for each measure x series combination", () => {
@@ -410,8 +410,8 @@ describe("transformToChartData", () => {
 
             const result = transformToChartData(makeResponse(rows, cols), query);
 
-            expect(result.datasets.find(d => d.label === "M1 - ")!.data).toEqual([30]);
-            expect(result.datasets.find(d => d.label === "M2 - ")!.data).toEqual([3]);
+            expect(result.datasets.find(d => d.label === "M1")!.data).toEqual([30]);
+            expect(result.datasets.find(d => d.label === "M2")!.data).toEqual([3]);
         });
     });
 
@@ -506,7 +506,7 @@ describe("transformToChartData", () => {
 
             const result = transformToChartData(makeResponse(rows, cols), query);
 
-            expect(result.datasets[0].label).toBe("val - ");
+            expect(result.datasets[0].label).toBe("val");
             expect(result.datasets[0].data).toEqual([42]);
         });
 
@@ -521,7 +521,7 @@ describe("transformToChartData", () => {
             const result = transformToChartData(makeResponse(rows, cols), query);
 
             // title is empty string -> falsy -> falls back to completeName
-            expect(result.datasets[0].label).toBe("val - ");
+            expect(result.datasets[0].label).toBe("val");
         });
     });
 

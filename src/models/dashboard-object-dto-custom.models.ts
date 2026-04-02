@@ -35,6 +35,11 @@ export interface TCustomHavingFilter {
   }
 }
 
+export interface TCustomHavingFilterRoot {
+  join: TBooleanOperator,
+  filters: TCustomHavingFilter[]
+}
+
 export interface TCustomPosWindowFunctionFilter {
   completeName?: string,
   filters?: TCustomPosWindowFunctionFilter[],
@@ -79,6 +84,11 @@ export interface TCustomWhereFilter {
   }
 }
 
+export interface TCustomWhereFilterRoot {
+  join: TBooleanOperator,
+  filters: TCustomWhereFilter[]
+}
+
 interface TComponentGridView {
   gridBaseType: TGridBaseType.gbtSingleDimension,
   columns?: {
@@ -118,7 +128,7 @@ interface TComponentGridView {
     measureFunction?: TMeasureFunction
   }[],
   distinct?: boolean, // Inserido para uso nos testes automatizados
-  havingFilters?: TCustomHavingFilter,
+  havingFilters?: TCustomHavingFilterRoot,
 }
 
 interface TComponentChartView {
@@ -161,7 +171,7 @@ interface TComponentChartView {
     completeName?: string,
     title?: string
   }[],
-  havingFilters?: TCustomHavingFilter,
+  havingFilters?: TCustomHavingFilterRoot,
   labelLimit?: {
     additionalText?: string,
     count?: number,
@@ -259,7 +269,7 @@ export interface TComponentApi_TExecuteInputCustom {
     },
     version?: string,
     type?: TComponentType.ctGrid | TComponentType.ctChart,
-    whereFilters?: TCustomWhereFilter,
+    whereFilters?: TCustomWhereFilterRoot,
     gridView?: TComponentGridView,
     chartViews?: TComponentChartView[],
   },
@@ -292,7 +302,7 @@ interface TComponentPivotGridView {
     measureFunction?: TMeasureFunction
   }[],
   distinct?: boolean, // Inserido para uso nos testes automatizados
-  havingFilters?: TCustomHavingFilter,
+  havingFilters?: TCustomHavingFilterRoot,
 }
 
 export interface TComponentApi_TExecutePivotTableCustomInput {
@@ -318,7 +328,7 @@ export interface TComponentApi_TExecutePivotTableCustomInput {
     },
     version?: string,
     type?: TComponentType.ctGrid,
-    whereFilters?: TCustomWhereFilter,
+    whereFilters?: TCustomWhereFilterRoot,
     gridView?: TComponentPivotGridView,
   },
   recsMax?: number,

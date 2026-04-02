@@ -1,5 +1,4 @@
 import { TBooleanOperator } from "./TBooleanOperator";
-import { TComparisonOperator } from "./TComparisonOperator";
 import { TFieldType } from "./TFieldType";
 import { TSortDirection } from "./TSortDirection";
 
@@ -32,15 +31,31 @@ export type LLMAggregateFunction =
     | "SUM_DISTINCT"
     | "AVG_DISTINCT";
 
+export type LLMComparisonOperator =
+    | "LIKE"
+    | "="
+    | "!="
+    | ">"
+    | ">="
+    | "<"
+    | "<="
+    | "IN"
+    | "BETWEEN"
+    | "IS_NULL"
+    | "STARTS_WITH"
+    | "ENDS_WITH";
+
 export interface LLMMeasure {
     completeName: string;
     aggregateFunction: LLMAggregateFunction;
     title: string;
 }
 
+export type LLMSortDirection = "ASC" | "DESC";
+
 export interface LLMSort {
     completeName: string;
-    direction: TSortDirection;
+    direction?: LLMSortDirection;
     aggregateFunction: LLMAggregateFunction;
 }
 
@@ -67,21 +82,35 @@ export interface LLMCalculatedField {
 
 export type LLMFilterValue = string | number | boolean | null;
 
-export interface LLMWhereFilters {
+export interface LLMWhereFilterGroup {
+    filters: LLMWhereFilters[];
+    join: TBooleanOperator;
+}
+
+export interface LLMWhereFilterCondition {
     completeName: string;
     filters: LLMWhereFilters[];
     join: TBooleanOperator;
     not: boolean;
-    operator: TComparisonOperator;
+    operator: LLMComparisonOperator;
     values: LLMFilterValue[];
 }
 
-export interface LLMHavingFilters {
+export type LLMWhereFilters = LLMWhereFilterGroup | LLMWhereFilterCondition;
+
+export interface LLMHavingFilterGroup {
+    filters: LLMHavingFilters[];
+    join: TBooleanOperator;
+}
+
+export interface LLMHavingFilterCondition {
     completeName: string;
     filters: LLMHavingFilters[];
     join: TBooleanOperator;
     aggregateFunction: LLMAggregateFunction;
     not: boolean;
-    operator: TComparisonOperator;
+    operator: LLMComparisonOperator;
     values: LLMFilterValue[];
 }
+
+export type LLMHavingFilters = LLMHavingFilterGroup | LLMHavingFilterCondition;

@@ -3,6 +3,7 @@ import { MetadataField } from "../constants";
 import * as chatService from "../services/chat.service";
 import * as openAiService from "../services/open-ai.service";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
+import { logger } from "../utils/logger";
 
 interface FieldMetadata extends MetadataField {
   title?: string;
@@ -128,7 +129,17 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
     const allMessages = chatService.getMessagesByConversationId(newConversation.id);
     const input = buildOpenAIInput(allMessages);
     const { structuredOutput, openAiItems, executionData, errorResponse } =
-      await openAiService.createModelResponse(input, metadataId);
+      await openAiService.createModelResponse(input, metadataId, {
+        suggestConversationName: true,
+        userTextMessage,
+        availableFieldNames: metadataFields
+          .map((field) => field.completeName)
+          .filter((fieldName): fieldName is string => typeof fieldName === "string" && fieldName.length > 0),
+      });
+
+    if (structuredOutput.conversationNameSuggestion) {
+      chatService.updateConversationName(newConversation.id, structuredOutput.conversationNameSuggestion);
+    }
 
     // Create assistant AppMessage with all openAiItems from the response
     const assistantAppMessage = chatService.createAppMessage(newConversation.id, {
@@ -144,6 +155,7 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
       newMessages: [userAppMessage, assistantAppMessage],
     });
   } catch (error: any) {
+    logger.error("Error initiating conversation:", error);
     return res.status(500).json({ message: "Erro ao iniciar conversa.", error: error.message });
   }
 };
@@ -201,7 +213,11 @@ export const addUserMessageToConversation = async (
     console.log("Input para LLM:", JSON.stringify(input, null, 2));
 
     const { structuredOutput, openAiItems, executionData, errorResponse } =
-      await openAiService.createModelResponse(input, conversation.metadataId);
+      await openAiService.createModelResponse(input, conversation.metadataId, {
+        availableFieldNames: conversation.metadataFields
+          .map((field) => field.completeName)
+          .filter((fieldName): fieldName is string => typeof fieldName === "string" && fieldName.length > 0),
+      });
 
     // Create assistant AppMessage with all openAiItems from the response
     const assistantAppMessage = chatService.createAppMessage(conversationId, {
@@ -214,6 +230,7 @@ export const addUserMessageToConversation = async (
 
     return res.status(201).json({ newMessages: [userAppMessage, assistantAppMessage] });
   } catch (error: any) {
+    logger.error("Error adding message to conversation:", error);
     return res
       .status(500)
       .json({ message: "Erro ao adicionar mensagem à conversa.", error: error.message });

@@ -255,3 +255,22 @@ export function moveConversationToFolder(
   }
   return undefined;
 }
+
+export function updateConversationName(
+  conversationId: number,
+  name: string
+): Conversation | undefined {
+  const conversation = conversations.find((c) => c.id === conversationId);
+  if (!conversation) {
+    return undefined;
+  }
+
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    return conversation;
+  }
+
+  conversation.name = trimmedName;
+  conversation.updatedAt = new Date();
+  return conversation;
+}

@@ -1,5 +1,11 @@
 import fetch from "node-fetch";
-import type { PivotGridResponse } from "../types/pivot-grid-response.types";
+import { TFieldType } from "../models/TFieldType";
+import type {
+  PivotGridCellValue,
+  PivotGridResponse,
+  RawPivotGridResponse,
+  RawPivotGridRow,
+} from "../types/pivot-grid-response.types";
 import { encryptWithPublicKey } from "../utils/utils";
 
 interface MetadataSummaryCache {
@@ -183,7 +189,159 @@ export async function executePivotGridComponent(
 
   await throwIfError(response, "executePivotGridComponent");
 
-  return response.json() as Promise<PivotGridResponse>;
+  const rawResponse = await response.json() as RawPivotGridResponse;
+  return normalizePivotGridResponse(rawResponse);
+}
+
+function normalizePivotGridResponse(raw: RawPivotGridResponse): PivotGridResponse {
+  const rows = raw.rows.map((row) => normalizePivotGridRow(row, raw.cols));
+  return {
+    ...raw,
+    rows,
+  };
+}
+
+function normalizePivotGridRow(
+  row: RawPivotGridRow,
+  cols: RawPivotGridResponse["cols"],
+): PivotGridResponse["rows"][number] {
+  const normalized: PivotGridResponse["rows"][number] = {};
+
+  for (let idx = 0; idx < cols.length; idx++) {
+    const key = `d${idx + 1}` as const;
+    const rawValue = row[key];
+    if (rawValue === undefined) {
+      continue;
+    }
+
+    normalized[key] = normalizeCellValue(rawValue, cols[idx]!.dataType);
+  }
+
+  return normalized;
+}
+
+function normalizeCellValue(value: string, dataType: number): PivotGridCellValue {
+  switch (dataType) {
+    case TFieldType.ftBoolean:
+      return normalizeBoolean(value);
+
+    case TFieldType.ftSmallint:
+    case TFieldType.ftInteger:
+    case TFieldType.ftWord:
+    case TFieldType.ftFloat:
+    case TFieldType.ftCurrency:
+    case TFieldType.ftBCD:
+    case TFieldType.ftAutoInc:
+    case TFieldType.ftLargeint:
+    case TFieldType.ftFMTBcd:
+    case TFieldType.ftLongWord:
+    case TFieldType.ftShortint:
+    case TFieldType.ftByte:
+    case TFieldType.ftExtended:
+    case TFieldType.ftSingle:
+      return normalizeNumber(value);
+
+    case TFieldType.ftDate:
+    case TFieldType.ftTime:
+    case TFieldType.ftDateTime:
+    case TFieldType.ftTimeStamp:
+    case TFieldType.ftOraTimeStamp:
+    case TFieldType.ftTimeStampOffset:
+      return normalizeDateTime(value);
+
+    case TFieldType.ftUnknown:
+    case TFieldType.ftString:
+    case TFieldType.ftBytes:
+    case TFieldType.ftVarBytes:
+    case TFieldType.ftBlob:
+    case TFieldType.ftMemo:
+    case TFieldType.ftGraphic:
+    case TFieldType.ftFmtMemo:
+    case TFieldType.ftParadoxOle:
+    case TFieldType.ftDBaseOle:
+    case TFieldType.ftTypedBinary:
+    case TFieldType.ftCursor:
+    case TFieldType.ftFixedChar:
+    case TFieldType.ftWideString:
+    case TFieldType.ftADT:
+    case TFieldType.ftArray:
+    case TFieldType.ftReference:
+    case TFieldType.ftDataSet:
+    case TFieldType.ftOraBlob:
+    case TFieldType.ftOraClob:
+    case TFieldType.ftVariant:
+    case TFieldType.ftInterface:
+    case TFieldType.ftIDispatch:
+    case TFieldType.ftGuid:
+    case TFieldType.ftFixedWideChar:
+    case TFieldType.ftWideMemo:
+    case TFieldType.ftOraInterval:
+    case TFieldType.ftConnection:
+    case TFieldType.ftParams:
+    case TFieldType.ftStream:
+    case TFieldType.ftObject:
+      return value;
+
+    default:
+      return value;
+  }
+}
+
+function normalizeBoolean(value: string): PivotGridCellValue {
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "t", "yes", "y", "sim", "s"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "f", "no", "n", "nao", "não"].includes(normalized)) {
+    return false;
+  }
+  return value;
+}
+
+function normalizeNumber(value: string): PivotGridCellValue {
+  const parsed = parseLocalizedNumber(value);
+  if (parsed == null || Number.isNaN(parsed)) {
+    return value;
+  }
+  return parsed;
+}
+
+function normalizeDateTime(value: string): PivotGridCellValue {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toISOString();
+}
+
+function parseLocalizedNumber(value: string): number | null {
+  const raw = value.trim();
+  if (!raw) {
+    return null;
+  }
+
+  const withoutSpaces = raw.replace(/\s+/g, "");
+  const sanitized = withoutSpaces.replace(/[^\d,.-]/g, "");
+  if (!sanitized) {
+    return null;
+  }
+
+  const lastComma = sanitized.lastIndexOf(",");
+  const lastDot = sanitized.lastIndexOf(".");
+
+  let normalized = sanitized;
+  if (lastComma >= 0 && lastDot >= 0) {
+    if (lastComma > lastDot) {
+      normalized = sanitized.replace(/\./g, "").replace(",", ".");
+    } else {
+      normalized = sanitized.replace(/,/g, "");
+    }
+  } else if (lastComma >= 0) {
+    normalized = sanitized.replace(",", ".");
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export async function executeMetadata(metadataId: number, accessToken: string): Promise<any> {

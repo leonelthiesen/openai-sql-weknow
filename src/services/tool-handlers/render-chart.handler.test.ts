@@ -57,7 +57,7 @@ function makeManifest(labels: string[], datasets: { label: string; data: number[
 describe("hydrateChartConfig", () => {
     const manifest = makeManifest(
         ["Empresa A", "Empresa B", "Empresa C"],
-        [{ label: "vendas.total - ", data: [1000.50, 2000.75, 3000.00] }]
+        [{ label: "vendas.total", data: [1000.50, 2000.75, 3000.00] }]
     );
 
     it("replaces xAxis.data with manifest labels", () => {
@@ -78,7 +78,7 @@ describe("hydrateChartConfig", () => {
 
         const result = hydrateChartConfig(config, manifest) as any;
         expect(result.series[0].data).toEqual([1000.50, 2000.75, 3000.00]);
-        expect(result.series[0].name).toBe("vendas.total - ");
+        expect(result.series[0].name).toBe("vendas.total");
     });
 
     it("assigns unique series IDs", () => {
@@ -138,7 +138,7 @@ describe("hydrateChartConfig", () => {
         };
 
         const result = hydrateChartConfig(config, manifest) as any;
-        expect(result.dataset.source[0]).toEqual(["Category", "vendas.total - "]);
+        expect(result.dataset.source[0]).toEqual(["Category", "vendas.total"]);
         expect(result.dataset.source[1]).toEqual(["Empresa A", 1000.50]);
         expect(result.dataset.source).toHaveLength(4); // header + 3 rows
     });
@@ -147,8 +147,8 @@ describe("hydrateChartConfig", () => {
         const multiManifest = makeManifest(
             ["A", "B"],
             [
-                { label: "vendas.total - ", data: [100, 200] },
-                { label: "vendas.qtd - ", data: [5, 10] },
+                { label: "vendas.total", data: [100, 200] },
+                { label: "vendas.qtd", data: [5, 10] },
             ]
         );
 
@@ -169,8 +169,8 @@ describe("hydrateChartConfig", () => {
         const multiManifest = makeManifest(
             ["A", "B"],
             [
-                { label: "Receita - ", data: [100, 200] },
-                { label: "Custo - ", data: [50, 80] },
+                { label: "Receita", data: [100, 200] },
+                { label: "Custo", data: [50, 80] },
             ]
         );
 
@@ -181,7 +181,7 @@ describe("hydrateChartConfig", () => {
 
         const result = hydrateChartConfig(config, multiManifest) as any;
         expect(result.series).toHaveLength(2);
-        expect(result.series[1].name).toBe("Custo - ");
+        expect(result.series[1].name).toBe("Custo");
         expect(result.series[1].data).toEqual([50, 80]);
         expect(result.series[1].type).toBe("line");
     });
@@ -189,7 +189,7 @@ describe("hydrateChartConfig", () => {
     it("truncates extra series when LLM creates more than manifest", () => {
         const singleManifest = makeManifest(
             ["A", "B"],
-            [{ label: "Total - ", data: [100, 200] }]
+            [{ label: "Total", data: [100, 200] }]
         );
 
         const config = {
@@ -202,7 +202,7 @@ describe("hydrateChartConfig", () => {
 
         const result = hydrateChartConfig(config, singleManifest) as any;
         expect(result.series).toHaveLength(1);
-        expect(result.series[0].name).toBe("Total - ");
+        expect(result.series[0].name).toBe("Total");
     });
 
     it("handles series with unique IDs for ECharts transitions", () => {
@@ -243,14 +243,14 @@ describe("buildChartDataManifest", () => {
             calculatedFields: [],
             categoryDimensions: [{ completeName: "vendas.empresa", title: "Empresa" }],
             measures: [{ completeName: "vendas.total", aggregateFunction: "SUM", title: "Total" }],
-            filters: { completeName: "", filters: [], join: 0 as any, not: false, operator: 0 as any, values: [] },
-            havingFilters: { completeName: "", filters: [], join: 0 as any, aggregateFunction: "NONE", not: false, operator: 0 as any, values: [] },
+            filters: { completeName: "", filters: [], join: 0 as any, not: false, operator: "LIKE", values: [] },
+            havingFilters: { completeName: "", filters: [], join: 0 as any, aggregateFunction: "NONE", not: false, operator: "LIKE", values: [] },
         };
 
         const manifest = buildChartDataManifest(data, query);
         expect(manifest.labels).toEqual(["Empresa A", "Empresa B"]);
         expect(manifest.datasets).toHaveLength(1);
-        expect(manifest.datasets[0]!.label).toBe("Total - ");
+        expect(manifest.datasets[0]!.label).toBe("Total");
         expect(manifest.datasets[0]!.data).toEqual([1000, 2000]);
     });
 
@@ -272,8 +272,8 @@ describe("buildChartDataManifest", () => {
             categoryDimensions: [{ completeName: "vendas.empresa", title: "Empresa" }],
             seriesDimensions: [{ completeName: "vendas.ano", title: "Ano" }],
             measures: [{ completeName: "vendas.total", aggregateFunction: "SUM", title: "Total" }],
-            filters: { completeName: "", filters: [], join: 0 as any, not: false, operator: 0 as any, values: [] },
-            havingFilters: { completeName: "", filters: [], join: 0 as any, aggregateFunction: "NONE", not: false, operator: 0 as any, values: [] },
+            filters: { completeName: "", filters: [], join: 0 as any, not: false, operator: "LIKE", values: [] },
+            havingFilters: { completeName: "", filters: [], join: 0 as any, aggregateFunction: "NONE", not: false, operator: "LIKE", values: [] },
         };
 
         const manifest = buildChartDataManifest(data, query);
@@ -290,7 +290,7 @@ describe("buildChartDataManifest", () => {
 describe("buildDeveloperMessage", () => {
     it("returns generic message when no manifest", () => {
         const msg = buildDeveloperMessage();
-        expect(msg).toContain("extract_data tool was called");
+        expect(msg).toContain("The query was executed and column schema with OBFUSCATED CSV sample data are provided.");
         expect(msg).not.toContain("CRITICAL");
     });
 

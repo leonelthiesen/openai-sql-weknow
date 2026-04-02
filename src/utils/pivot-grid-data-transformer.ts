@@ -1,5 +1,5 @@
 import { LLMQuery } from "../models/llm-structured-output.models";
-import { PivotGridResponse, RowKey } from "../types/pivot-grid-response.types";
+import { PivotGridCellValue, PivotGridResponse, RowKey } from "../types/pivot-grid-response.types";
 
 export interface Dataset {
   label: string;
@@ -9,6 +9,34 @@ export interface Dataset {
 export interface ChartData {
   labels: string[];
   datasets: Dataset[];
+}
+
+function toDisplayValue(value: PivotGridCellValue | undefined): string {
+    if (value == null) {
+        return "";
+    }
+    return String(value);
+}
+
+function toNumericValue(value: PivotGridCellValue | undefined): number | null {
+    if (value == null || value === "") {
+        return 0;
+    }
+
+    if (typeof value === "number") {
+        return Number.isNaN(value) ? null : value;
+    }
+
+    if (typeof value === "boolean") {
+        return value ? 1 : 0;
+    }
+
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+function formatMeasureSeriesLabel(measureTitle: string, seriesKey: string): string {
+    return seriesKey ? `${measureTitle} - ${seriesKey}` : measureTitle;
 }
 
 
@@ -48,19 +76,18 @@ export function transformToChartData(
                 throw new Error(`Category key is undefined for category dimension. Check if the completeName matches a column.`);
             }
 
-            return row[key] ?? ''
+            return toDisplayValue(row[key]);
         });
         const categoryKey = categoryValues.join(' | '); // separador configurável
 
         // Construir chave da série (concatenação dos valores das dimensões de série)
-        const seriesValues = seriesKeys.map(key => row[key] ?? '');
+        const seriesValues = seriesKeys.map(key => toDisplayValue(row[key]));
         const seriesKey = seriesValues.join(' | ');
 
         // Para cada medida, acumular o valor
         for (const measure of measureItems) {
-            const valueStr = row[measure.key];
-            const value = parseFloat(valueStr || '0');
-            if (isNaN(value)) continue;
+            const value = toNumericValue(row[measure.key]);
+            if (value == null) continue;
 
             const aggByCategory = measuresAgg.get(measure.title)!;
             if (!aggByCategory.has(categoryKey)) {
@@ -79,7 +106,7 @@ export function transformToChartData(
             allCategories.add(cat);
         }
     }
-    const labels = Array.from(allCategories).sort();
+    const labels = Array.from(allCategories);
 
     // 6. Construir datasets: para cada medida, para cada série, gerar um dataset
     const datasets: Dataset[] = [];
@@ -100,7 +127,7 @@ export function transformToChartData(
                 return seriesMap ? (seriesMap.get(seriesKey) ?? 0) : 0;
             });
             datasets.push({
-                label: `${measureTitle} - ${seriesKey}`,
+                label: formatMeasureSeriesLabel(measureTitle, seriesKey),
                 data,
             });
         }

@@ -1,7 +1,14 @@
 export type RowKey = `d${number}`;
 
+export type PivotGridCellRawValue = string;
+export type PivotGridCellValue = string | number | boolean | null;
+
+export interface RawPivotGridRow {
+  [key: RowKey]: PivotGridCellRawValue;
+}
+
 export interface PivotGridRow {
-  [key: RowKey]: string;
+  [key: RowKey]: PivotGridCellValue;
 }
 
 export interface PivotGridColumnHeader {
@@ -82,8 +89,8 @@ export interface PivotGridServerInfo {
   version: string;
 }
 
-export interface PivotGridResponse {
-  rows: PivotGridRow[];
+interface PivotGridResponseBase<TRow> {
+  rows: TRow[];
   cols: PivotGridColumn[];
   totals: PivotGridTotals;
   formattings: PivotGridFormatting[];
@@ -100,3 +107,6 @@ export interface PivotGridResponse {
   showGrandTotalRow: boolean;
   serverInfo: PivotGridServerInfo;
 }
+
+export type RawPivotGridResponse = PivotGridResponseBase<RawPivotGridRow>;
+export type PivotGridResponse = PivotGridResponseBase<PivotGridRow>;

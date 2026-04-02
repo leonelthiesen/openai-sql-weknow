@@ -111,15 +111,15 @@ describe("buildDataSummary", () => {
             makeCol({ completeName: "total", section: 15, dataType: TFieldType.ftFloat }),
         ];
         const rows = [
-            { d0: "Empresa Real", d1: "5000.00" },
-            { d0: "Outra Empresa", d1: "3000.50" },
+            { d1: "Empresa Real", d2: "5000.00" },
+            { d1: "Outra Empresa", d2: "3000.50" },
         ];
         const data = makeResponse(rows, cols);
         const result = buildDataSummary(data);
 
         expect(result).toContain("Query executed successfully.");
         expect(result).toContain("## Schema");
-        expect(result).toContain("## Sample Data CSV (first 10 rows, obfuscated)");
+        expect(result).toContain("## OBFUSCATED Sample Data CSV (limited to 10 rows)");
         expect(result).toContain("Total rows: 2");
         expect(result).toContain("| 0 | empresa |");
         expect(result).toContain("| 1 | total |");
@@ -134,7 +134,7 @@ describe("buildDataSummary", () => {
 
         expect(result).toContain("Query executed successfully.");
         expect(result).toContain("## Schema");
-        expect(result).not.toContain("## Sample Data");
+        expect(result).not.toContain("## OBFUSCATED Sample Data CSV");
         expect(result).toContain("Total rows: 0");
     });
 
@@ -142,7 +142,7 @@ describe("buildDataSummary", () => {
         const cols = [
             makeCol({ completeName: "empresa", section: 17, dataType: TFieldType.ftString }),
         ];
-        const rows = [{ d0: "Dados Secretos LTDA" }];
+        const rows = [{ d1: "Dados Secretos LTDA" }];
         const data = makeResponse(rows, cols);
         const result = buildDataSummary(data);
 
@@ -154,7 +154,7 @@ describe("buildDataSummary", () => {
             makeCol({ completeName: "empresa", section: 17, dataType: TFieldType.ftString }),
         ];
         // The obfuscated output (not the input) needs quoting — test that the function doesn't crash
-        const rows = [{ d0: 'Value with "quotes" and, commas' }];
+        const rows = [{ d1: 'Value with "quotes" and, commas' }];
         const data = makeResponse(rows, cols);
         const result = buildDataSummary(data);
 
@@ -165,12 +165,12 @@ describe("buildDataSummary", () => {
         const cols = [
             makeCol({ completeName: "nome", section: 17, dataType: TFieldType.ftString }),
         ];
-        const rows = Array.from({ length: 25 }, (_, i) => ({ d0: `Name ${i}` }));
+        const rows = Array.from({ length: 25 }, (_, i) => ({ d1: `Name ${i}` }));
         const data = makeResponse(rows, cols);
         const result = buildDataSummary(data);
 
         // Header + 10 data rows = 11 lines in CSV block
-        const csvSection = result.split("## Sample Data CSV (first 10 rows, obfuscated)\n")[1]!;
+        const csvSection = result.split("## OBFUSCATED Sample Data CSV (limited to 10 rows)\n")[1]!;
         const csvLines = csvSection.split("\n\nTotal rows:")[0]!.split("\n");
         expect(csvLines).toHaveLength(11); // 1 header + 10 data
         expect(result).toContain("Total rows: 25");
