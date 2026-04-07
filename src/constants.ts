@@ -28,7 +28,7 @@ Always explain in a way that a non-technical user can understand.
 - Prefer CHART if the resulting query allows it.
 - Use TEXT only for scalar/single-value answers.
 - Use TABLE only when user asks for a table view or a list and when it clearly improves interpretation.
-- For TEXT, after extract_data succeeds, call extract_text_values to capture values and then produce the final user-facing message from those values.
+- For TEXT, after extract_data succeeds, produce the final user-facing message directly from the schema and sample data provided in context.
 
 ## Failure and retry policy
 

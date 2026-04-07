@@ -51,7 +51,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
             "This query will not be displayed directly to the user.",
             "The result data will be rendered (as table, chart or text) separately right after your message.",
             "In general, do not repeat the same field in both seriesDimensions and categoryDimensions.",
-            "Always use sorting, either by category using 'categorySort' or by series using 'seriesSort'. Especially when 'recsMax' is used to handle a top/limit request.",
+            "Always use sorting, either by category using 'categorySort' or by series using 'seriesSort'.",
           ),
           properties: {
             calculatedFields: {
@@ -231,14 +231,14 @@ export function getExtractDataToolDefinition(): FunctionTool {
             },
             filters: { $ref: "#/$defs/TWhereFiltersRoot" },
             havingFilters: { $ref: "#/$defs/THavingFiltersRoot" },
-            recsMax: {
-              type: "number",
-              description: description(
-                "Maximum number of records to return.",
-                "Use this when the user requests a limit/top N.",
-                "When recsMax is used, also provide categorySort so the top/limit is deterministic.",
-              )
-            },
+            // recsMax: {
+            //   type: "number",
+            //   description: description(
+            //     "Maximum number of records to return.",
+            //     "Use this when the user requests a limit/top N.",
+            //     "When recsMax is used, also provide categorySort so the top/limit is deterministic.",
+            //   )
+            // },
           },
           required: ["measures"],
           additionalProperties: false,
@@ -277,7 +277,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
         TCalculatedFieldType: {
           type: "number",
           description: "Enum for calculated field data types",
-          enum: [1, 3, 6, 9, 10, 11],
+          enum: [1, 6, 9, 10, 11],
           oneOf: [
             { const: 1, title: "ftString", description: "String" },
             { const: 6, title: "ftFloat", description: "Float" },

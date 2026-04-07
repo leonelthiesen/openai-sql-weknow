@@ -331,7 +331,6 @@ export interface TComponentApi_TExecutePivotTableCustomInput {
     whereFilters?: TCustomWhereFilterRoot,
     gridView?: TComponentPivotGridView,
   },
-  recsMax?: number,
 }
 
 

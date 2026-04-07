@@ -68,7 +68,6 @@ export interface LLMQuery {
     seriesSort?: LLMSort[];
     filters: LLMWhereFilters;
     havingFilters: LLMHavingFilters;
-    recsMax?: number;
 }
 
 export interface LLMCalculatedField {

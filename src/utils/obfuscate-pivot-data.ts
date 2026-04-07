@@ -210,6 +210,33 @@ function buildObfuscatedCsv(
     return [header, ...dataRows].join("\n");
 }
 
+function buildRawCsv(
+    rows: PivotGridRow[],
+    cols: PivotGridColumn[],
+    maxRows = 10
+): string {
+    const header = cols.map((c) => csvEscape(c.header.caption)).join(",");
+
+    const dataRows = rows.slice(0, maxRows).map((row) => {
+        return cols
+            .map((_, i) => {
+                const dataIndex = i + 1;
+                const rawValue = toCellString(row[`d${dataIndex}` as `d${number}`]);
+                return csvEscape(rawValue);
+            })
+            .join(",");
+    });
+
+    return [header, ...dataRows].join("\n");
+}
+
+function limitCsvRows(csv: string, maxRows = 10): string {
+    const lines = csv.split("\n");
+    if (lines.length <= 1) return csv;
+
+    return [lines[0]!, ...lines.slice(1, maxRows + 1)].join("\n");
+}
+
 function obfuscateCsv(csv: string, obfuscator: DataObfuscator, maxRows = 10): string {
     const lines = csv.split("\n");
     if (lines.length <= 1) return csv;
@@ -290,6 +317,28 @@ export function buildDataSummary(data: PivotGridResponse, pivotCsv?: string): st
         parts.push(
             "",
             "## OBFUSCATED Sample Data CSV (limited to 10 rows)",
+            csvContent,
+        );
+    }
+
+    parts.push("", `Total rows: ${data.rows.length}`);
+
+    return parts.join("\n");
+}
+
+export function buildTextDataSummary(data: PivotGridResponse, pivotCsv?: string): string {
+    const parts: string[] = [
+        "Query executed successfully.",
+        "",
+        buildSchemaDescription(data.cols),
+    ];
+
+    if (data.rows.length > 0) {
+        const csvContent = pivotCsv ? limitCsvRows(pivotCsv) : buildRawCsv(data.rows, data.cols);
+
+        parts.push(
+            "",
+            "## Sample Data CSV (limited to 10 rows)",
             csvContent,
         );
     }

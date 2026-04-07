@@ -13,7 +13,7 @@ import { handleExtractData } from "./tool-handlers/extract-data.handler";
 import { handleFinalizeTextMessage } from "./tool-handlers/finalize-text-message.handler";
 import { handleRenderChart } from "./tool-handlers/render-chart.handler";
 import { logger } from "../utils/logger";
-import { buildDataSummary } from "../utils/obfuscate-pivot-data";
+import { buildDataSummary, buildTextDataSummary } from "../utils/obfuscate-pivot-data";
 import { generatePivotCSV } from "../utils/pivot-grid-data-csv-transformer";
 import { PivotGridResponse } from "../types/pivot-grid-response.types";
 import type OpenAI from "openai";
@@ -404,7 +404,9 @@ export async function createModelResponse(
 
         let dataOutput: string;
         if (executionData) {
-            dataOutput = buildDataSummary(executionData, pivotCsv);
+            dataOutput = currentArgs.renderType === "TEXT"
+                ? buildTextDataSummary(executionData, pivotCsv)
+                : buildDataSummary(executionData, pivotCsv);
         } else if (errorResponse) {
             dataOutput = `Query execution failed: ${typeof errorResponse === "string" ? errorResponse : JSON.stringify(errorResponse)}`;
         } else {

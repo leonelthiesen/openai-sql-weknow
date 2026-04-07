@@ -320,7 +320,7 @@ export function transformLLMToComponentExecuteInput (
                 havingFilters: havingFilters,
             }
         },
-        recsMax: query.recsMax
+        // recsMax: query.recsMax
     };
 
     return executeInput;
