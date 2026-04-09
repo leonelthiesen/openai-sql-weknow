@@ -23,13 +23,13 @@ export function getExtractDataToolDefinition(): FunctionTool {
             "Message contextualizing the response in PORTUGUESE.",
             "Use Markdown.",
             "The data will be rendered separately right after this message.",
-            "Keep suggestions in userMessageSuggestions aligned with the message.",
+            "Keep suggestions only in userMessageSuggestions aligned with the message.",
           ),
         },
         userMessageSuggestions: {
           type: "array",
           description: description(
-            "List of suggestions for follow-up prompts, next actions, or analyses in PORTUGUESE.",
+            "List, in PORTUGUESE, of suggested next requests the user can send to the LLM to continue the conversation.",
           ),
           items: { type: "string" },
         },
@@ -73,7 +73,11 @@ export function getExtractDataToolDefinition(): FunctionTool {
                       "lowercase letters and '_'.",
                     ),
                   },
-                  dataType: { $ref: "#/$defs/TCalculatedFieldType" },
+                  dataType: {
+                    type: "string",
+                    description: "Data type expected by the execution of the SQL expression (from the formula property).",
+                    enum: ["String", "Number", "Date", "Time", "DateTime"],
+                  },
                   formula: {
                     type: "string",
                     description: description(
@@ -86,10 +90,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
                   },
                   hasAggregateFunction: {
                     type: "boolean",
-                    description: description(
-                      "Set to true if the formula contains an aggregation function",
-                      "(SUM, COUNT, AVG, MIN, MAX, etc.).",
-                    ),
+                    description: "Set to true if the formula contains an aggregation function (SUM, COUNT, AVG, MIN, MAX, etc.).",
                   },
                   title: {
                     type: "string",
@@ -261,30 +262,14 @@ export function getExtractDataToolDefinition(): FunctionTool {
           enum: ["ASC", "DESC"],
         },
         TBooleanOperator: {
-          type: "number",
-          description: "Enum for boolean operators",
-          enum: [0, 1],
-          oneOf: [
-            { const: 0, title: "boAnd", description: "AND boolean operator" },
-            { const: 1, title: "boOr", description: "OR boolean operator" },
-          ],
+          type: "string",
+          description: "SQL boolean operators",
+          enum: ["AND", "OR"],
         },
         TComparisonOperator: {
           type: "string",
           description: "SQL comparison operators in text form.",
           enum: ["LIKE", "=", "!=", ">", ">=", "<", "<=", "IN", "BETWEEN", "IS_NULL", "STARTS_WITH", "ENDS_WITH"],
-        },
-        TCalculatedFieldType: {
-          type: "number",
-          description: "Enum for calculated field data types",
-          enum: [1, 6, 9, 10, 11],
-          oneOf: [
-            { const: 1, title: "ftString", description: "String" },
-            { const: 6, title: "ftFloat", description: "Float" },
-            { const: 9, title: "ftDate", description: "Date" },
-            { const: 10, title: "ftTime", description: "Time" },
-            { const: 11, title: "ftDateTime", description: "DateTime" },
-          ],
         },
         TWhereFiltersRoot: {
           type: "object",

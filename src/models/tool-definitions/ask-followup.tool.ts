@@ -21,14 +21,14 @@ export function getAskFollowupToolDefinition(): FunctionTool {
           description: description(
             "Message in PORTUGUESE explaining exactly which information is missing.",
             "Provide short examples the user can copy or adapt.",
-            "Keep suggestions in userMessageSuggestions aligned with the message and focused on unblocking execution.",
+            "Keep suggestions only in userMessageSuggestions aligned with the message and focused on unblocking execution.",
             "Use Markdown.",
           ),
         },
         userMessageSuggestions: {
           type: "array",
           description: description(
-            "List of concrete follow-up suggestions in PORTUGUESE that unblock execution.",
+            "List of concrete follow-up user suggestions in PORTUGUESE that unblock execution.",
             "Keep suggestions short, specific, and directly actionable.",
           ),
           items: { type: "string" },

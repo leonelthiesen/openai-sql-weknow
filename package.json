@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
+    "migrate": "tsx src/migrate.ts",
     "build": "tsc",
     "type-check": "tsc --noEmit",
     "start-sample-msg": "tsx src/index.ts -m \"listar todos os campos da tabela\"",

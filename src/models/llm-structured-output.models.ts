@@ -1,7 +1,3 @@
-import { TBooleanOperator } from "./TBooleanOperator";
-import { TFieldType } from "./TFieldType";
-import { TSortDirection } from "./TSortDirection";
-
 export type LLMStructuredOutputAction = "FOLLOWUP_NEEDED" | "EXTRACT_DATA";
 
 export interface LLMStructuredOutput {
@@ -45,6 +41,8 @@ export type LLMComparisonOperator =
     | "STARTS_WITH"
     | "ENDS_WITH";
 
+export type LLMBooleanOperator = "AND" | "OR";
+
 export interface LLMMeasure {
     completeName: string;
     aggregateFunction: LLMAggregateFunction;
@@ -70,9 +68,11 @@ export interface LLMQuery {
     havingFilters: LLMHavingFilters;
 }
 
+export type LLMCalculatedFieldType = "String" | "Number" | "Date" | "Time" | "DateTime";
+
 export interface LLMCalculatedField {
     completeName?: string,
-    dataType?: TFieldType,
+    dataType?: LLMCalculatedFieldType,
     formula?: string,
     hasAggregateFunction?: boolean,
     hasAnalyticFunction?: boolean,
@@ -83,13 +83,13 @@ export type LLMFilterValue = string | number | boolean | null;
 
 export interface LLMWhereFilterGroup {
     filters: LLMWhereFilters[];
-    join: TBooleanOperator;
+    join: LLMBooleanOperator;
 }
 
 export interface LLMWhereFilterCondition {
     completeName: string;
     filters: LLMWhereFilters[];
-    join: TBooleanOperator;
+    join: LLMBooleanOperator;
     not: boolean;
     operator: LLMComparisonOperator;
     values: LLMFilterValue[];
@@ -99,13 +99,13 @@ export type LLMWhereFilters = LLMWhereFilterGroup | LLMWhereFilterCondition;
 
 export interface LLMHavingFilterGroup {
     filters: LLMHavingFilters[];
-    join: TBooleanOperator;
+    join: LLMBooleanOperator;
 }
 
 export interface LLMHavingFilterCondition {
     completeName: string;
     filters: LLMHavingFilters[];
-    join: TBooleanOperator;
+    join: LLMBooleanOperator;
     aggregateFunction: LLMAggregateFunction;
     not: boolean;
     operator: LLMComparisonOperator;

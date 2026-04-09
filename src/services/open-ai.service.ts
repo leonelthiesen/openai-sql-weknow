@@ -3,7 +3,7 @@ import {
     getExtractDataToolDefinition,
     getAskFollowupToolDefinition,
 } from "../models/tool-definitions";
-import type { OpenAiItem } from "./chat.service";
+import type { OpenAiItem } from "./chat.service.js";
 import type { OpenAIResponseSchema } from "../constants";
 import { parseToolArgs, ToolValidationError } from "../utils/tool-args-parser";
 import type { ExtractDataArgs } from "../types/tool-args.types";
@@ -17,8 +17,7 @@ import { buildDataSummary, buildTextDataSummary } from "../utils/obfuscate-pivot
 import { generatePivotCSV } from "../utils/pivot-grid-data-csv-transformer";
 import { PivotGridResponse } from "../types/pivot-grid-response.types";
 import type OpenAI from "openai";
-
-const MAX_RETRY_ATTEMPTS = 3;
+import { requestCorrectedCall, MAX_RETRY_ATTEMPTS } from "./llm-retry.js";
 
 interface CreateModelResponseOptions {
     suggestConversationName?: boolean;
@@ -41,81 +40,6 @@ function followupFallback(message: string, suggestions: string[], callId: string
         { toolName: "ask_followup", message, userMessageSuggestions: suggestions },
         callId
     );
-}
-
-async function requestNextCallAfterParseError(
-    call: OpenAI.Responses.ResponseFunctionToolCall,
-    responseOutput: unknown[],
-    parseErrorMessage: string,
-    attempt: number,
-    context: string,
-    baseInput: ResponseInputItem[],
-    primaryTools: OpenAI.Responses.Tool[],
-    openAiItems: OpenAiItem[]
-): Promise<{
-    call: OpenAI.Responses.ResponseFunctionToolCall;
-    responseOutput: unknown[];
-} | null> {
-    const parseErrorOutput = `Tool argument parse failed: ${parseErrorMessage}. Please fix tool arguments and try again.`;
-
-    openAiItems.push({
-        type: "function_call_output",
-        callId: call.call_id,
-        output: parseErrorOutput,
-    });
-
-    if (attempt >= MAX_RETRY_ATTEMPTS) {
-        logger.error("openai", `Parse failed at ${context} on final attempt`, {
-            attempt,
-            callId: call.call_id,
-            error: parseErrorMessage,
-        });
-        return null;
-    }
-
-    logger.warn("openai", `Parse failed at ${context}, requesting corrected tool call`, {
-        attempt,
-        callId: call.call_id,
-        error: parseErrorMessage,
-    });
-
-    const parseRetryInput: ResponseInputItem[] = [
-        ...baseInput,
-        ...(responseOutput as unknown as ResponseInputItem[]),
-        {
-            type: "function_call_output",
-            call_id: call.call_id,
-            output: parseErrorOutput,
-        } as ResponseInputItem,
-    ];
-
-    const {
-        response: parseRetryResponse,
-        functionCalls: parseRetryCalls,
-        reasoningItems: parseRetryReasoning,
-    } = await callOpenAI(parseRetryInput, primaryTools);
-
-    for (const item of parseRetryReasoning) {
-        openAiItems.push({ type: "reasoning", reasoningItem: item });
-    }
-
-    if (parseRetryCalls.length === 0) {
-        logger.error("openai", `Parse recovery at ${context}: model returned no function_call`);
-        return null;
-    }
-
-    const nextCall = parseRetryCalls[0]!;
-    openAiItems.push({
-        type: "function_call",
-        callId: nextCall.call_id,
-        name: nextCall.name,
-        arguments: nextCall.arguments,
-    });
-
-    return {
-        call: nextCall,
-        responseOutput: parseRetryResponse.output,
-    };
 }
 
 // ── Main orchestration ───────────────────────────────────────────────────────
@@ -181,16 +105,43 @@ export async function createModelResponse(
             } catch (error) {
                 if (!(error instanceof ToolValidationError)) throw error;
 
-                const next = await requestNextCallAfterParseError(
-                    primaryCall,
-                    primaryParseOutput,
-                    error.message,
-                    primaryParseAttempt,
-                    "primary",
-                    input,
-                    primaryTools,
-                    openAiItems
-                );
+                if (primaryParseAttempt >= MAX_RETRY_ATTEMPTS) {
+                    logger.error("openai", "Parse failed at primary on final attempt", {
+                        attempt: primaryParseAttempt,
+                        callId: primaryCall.call_id,
+                        error: error.message,
+                    });
+                    const fb = followupFallback(
+                        "Nao consegui processar a resposta gerada. Pode reformular sua pergunta para eu tentar novamente?",
+                        [
+                            "Reformule a pergunta com mais clareza",
+                            "Detalhe melhor quais dados voce precisa",
+                            "Tente uma consulta mais simples e direta",
+                        ],
+                        `${primaryCall.call_id}-primary-parse-error`
+                    );
+                    openAiItems.push(...fb.openAiItems);
+                    return {
+                        structuredOutput: await withConversationNameSuggestion(fb.structuredOutput),
+                        openAiItems,
+                        errorResponse: error.message,
+                    };
+                }
+
+                logger.warn("openai", "Parse failed at primary, requesting corrected call", {
+                    attempt: primaryParseAttempt,
+                    callId: primaryCall.call_id,
+                    error: error.message,
+                });
+
+                const next = await requestCorrectedCall({
+                    failedCall: primaryCall,
+                    errorOutput: `Tool argument parse failed: ${error.message}. Please fix tool arguments and try again.`,
+                    currentResponseOutput: primaryParseOutput,
+                    baseInput: input,
+                    tools: primaryTools,
+                    openAiItems,
+                });
 
                 if (!next) {
                     const fb = followupFallback(
@@ -254,6 +205,14 @@ export async function createModelResponse(
                 error: result.error.message,
             });
 
+            // Always record the error output in history
+            const errorOutput = `Query execution failed with error: ${result.error.message}. Please fix the query and try again.`;
+            openAiItems.push({
+                type: "function_call_output",
+                callId: currentCall.call_id,
+                output: errorOutput,
+            });
+
             if (attempt >= MAX_RETRY_ATTEMPTS || !result.error.retriable) {
                 if (!result.error.retriable) {
                     logger.error("openai", "Non-retriable error, stopping retries");
@@ -261,134 +220,91 @@ export async function createModelResponse(
                 break;
             }
 
-            const errorOutput = `Query execution failed with error: ${result.error.message}. Please fix the query and try again.`;
-
-            openAiItems.push({
-                type: "function_call_output",
-                callId: currentCall.call_id,
-                output: errorOutput,
+            const next = await requestCorrectedCall({
+                failedCall: currentCall,
+                errorOutput,
+                currentResponseOutput: lastResponse.output,
+                baseInput: input,
+                tools: primaryTools,
+                openAiItems,
             });
 
-            const retryInput: ResponseInputItem[] = [
-                ...input,
-                ...(lastResponse.output as unknown as ResponseInputItem[]),
-                {
-                    type: "function_call_output",
-                    call_id: currentCall.call_id,
-                    output: errorOutput,
-                } as ResponseInputItem,
-            ];
-
-            const { response: retryResponse, functionCalls: retryCalls, reasoningItems: retryReasoning } =
-                await callOpenAI(retryInput, primaryTools);
-
-            for (const item of retryReasoning) {
-                openAiItems.push({ type: "reasoning", reasoningItem: item });
+            if (!next) {
+                logger.error("openai", `Retry ${attempt}: model returned no function_call`);
+                break;
             }
 
-            if (retryCalls.length === 0 || retryCalls[0]!.name !== "extract_data") {
-                logger.error("openai", `Retry ${attempt}: model did not return extract_data`);
-
-                if (retryCalls.length > 0 && retryCalls[0]!.name === "ask_followup") {
-                    const followupCall = retryCalls[0]!;
-                    let followupArgs: ReturnType<typeof parseToolArgs> | undefined;
-                    try {
-                        followupArgs = parseToolArgs("ask_followup", followupCall.arguments);
-                    } catch (error) {
-                        if (error instanceof ToolValidationError) {
-                            await requestNextCallAfterParseError(
-                                followupCall,
-                                retryResponse.output,
-                                error.message,
-                                attempt,
-                                "retry-ask_followup",
-                                input,
-                                primaryTools,
-                                openAiItems
-                            );
-                            break;
-                        }
-                        throw error;
+            // Check if the model switched to ask_followup
+            if (next.call.name === "ask_followup") {
+                let followupArgs: ReturnType<typeof parseToolArgs> | undefined;
+                try {
+                    followupArgs = parseToolArgs("ask_followup", next.call.arguments);
+                } catch (parseError) {
+                    if (parseError instanceof ToolValidationError) {
+                        logger.error("openai", `Retry ${attempt}: ask_followup parse error after switch`, {
+                            error: parseError.message,
+                        });
+                        break;
                     }
+                    throw parseError;
+                }
 
-                    openAiItems.push({
-                        type: "function_call",
-                        callId: followupCall.call_id,
-                        name: followupCall.name,
-                        arguments: followupCall.arguments,
-                    });
-
-                    if (followupArgs?.toolName === "ask_followup") {
-                        const followupResult = handleAskFollowup(followupArgs, followupCall.call_id);
-                        openAiItems.push(...followupResult.openAiItems);
-                        return {
-                            structuredOutput: await withConversationNameSuggestion(
-                                followupResult.structuredOutput
-                            ),
-                            openAiItems,
-                            errorResponse,
-                        };
-                    }
+                if (followupArgs?.toolName === "ask_followup") {
+                    const followupResult = handleAskFollowup(followupArgs, next.call.call_id);
+                    openAiItems.push(...followupResult.openAiItems);
+                    return {
+                        structuredOutput: await withConversationNameSuggestion(
+                            followupResult.structuredOutput
+                        ),
+                        openAiItems,
+                        errorResponse,
+                    };
                 }
                 break;
             }
 
-            currentCall = retryCalls[0]!;
-            openAiItems.push({
-                type: "function_call",
-                callId: currentCall.call_id,
-                name: currentCall.name,
-                arguments: currentCall.arguments,
-            });
+            if (next.call.name !== "extract_data") {
+                logger.error("openai", `Retry ${attempt}: model did not return extract_data`);
+                break;
+            }
 
+            // Parse the new extract_data args
             try {
-                currentArgs = parseToolArgs("extract_data", currentCall.arguments, {
+                currentArgs = parseToolArgs("extract_data", next.call.arguments, {
                     availableFieldNames: options?.availableFieldNames,
                 }) as ExtractDataArgs;
-            } catch (error) {
-                if (!(error instanceof ToolValidationError)) throw error;
+            } catch (parseError) {
+                if (!(parseError instanceof ToolValidationError)) throw parseError;
 
-                const next = await requestNextCallAfterParseError(
-                    currentCall,
-                    retryResponse.output,
-                    error.message,
-                    attempt + 1,
-                    "retry-extract_data",
-                    input,
-                    primaryTools,
-                    openAiItems
-                );
+                const nextAfterParseError = await requestCorrectedCall({
+                    failedCall: next.call,
+                    errorOutput: `Tool argument parse failed: ${parseError.message}. Please fix tool arguments and try again.`,
+                    currentResponseOutput: next.responseOutput,
+                    baseInput: input,
+                    tools: primaryTools,
+                    openAiItems,
+                });
 
-                if (!next) break;
-
-                currentCall = next.call;
-                lastResponse = { ...lastResponse, output: next.responseOutput } as OpenAI.Responses.Response;
-
-                try {
-                    currentArgs = parseToolArgs("extract_data", currentCall.arguments, {
-                        availableFieldNames: options?.availableFieldNames,
-                    }) as ExtractDataArgs;
-                } catch (secondError) {
-                    if (secondError instanceof ToolValidationError) {
-                        await requestNextCallAfterParseError(
-                            currentCall,
-                            next.responseOutput,
-                            secondError.message,
-                            attempt + 2,
-                            "retry-extract_data-second",
-                            input,
-                            primaryTools,
-                            openAiItems
-                        );
-                        break;
-                    }
-                    throw secondError;
+                if (!nextAfterParseError || nextAfterParseError.call.name !== "extract_data") {
+                    break;
                 }
 
+                try {
+                    currentArgs = parseToolArgs("extract_data", nextAfterParseError.call.arguments, {
+                        availableFieldNames: options?.availableFieldNames,
+                    }) as ExtractDataArgs;
+                } catch {
+                    break;
+                }
+
+                currentCall = nextAfterParseError.call;
+                lastResponse = { ...lastResponse, output: nextAfterParseError.responseOutput } as OpenAI.Responses.Response;
                 logger.info("openai", `Retry ${attempt}: new query generated after parse error`);
                 continue;
             }
-            lastResponse = retryResponse;
+
+            currentCall = next.call;
+            lastResponse = { ...lastResponse, output: next.responseOutput } as OpenAI.Responses.Response;
             logger.info("openai", `Retry ${attempt}: new query generated`);
         }
 

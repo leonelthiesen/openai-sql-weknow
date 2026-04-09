@@ -10,7 +10,7 @@ export interface EnvironmentConfig {
   WEKNOW_API_PORT?: string;
   WEKNOW_ACCOUNT_TOKEN?: string;
 
-  // PostgreSQL (optional, for future use)
+  // PostgreSQL
   PGHOST?: string;
   PGPORT?: string;
   PGDATABASE?: string;

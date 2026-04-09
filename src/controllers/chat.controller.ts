@@ -1,18 +1,18 @@
 import { type Request, type Response } from "express";
+import type { ResponseInputItem } from "openai/resources/responses/responses";
 import { MetadataField } from "../constants";
 import * as chatService from "../services/chat.service";
 import * as openAiService from "../services/open-ai.service";
-import type { ResponseInputItem } from "openai/resources/responses/responses";
 import { logger } from "../utils/logger";
 
 interface FieldMetadata extends MetadataField {
   title?: string;
   formatOptions?: {
-    options?: Array<{ value: any; text: string }>;
-    [key: string]: any;
+    options?: Array<{ value: unknown; text: string }>;
+    [key: string]: unknown;
   };
-  sampleData?: any[];
-  [key: string]: any;
+  sampleData?: unknown[];
+  [key: string]: unknown;
 }
 
 interface StartConversationBody {
@@ -25,6 +25,10 @@ interface AddMessageBody {
   userTextMessage: string;
 }
 
+interface ShareConversationBody {
+  sharedWithUserId: string;
+}
+
 type NonReasoningOpenAiItem = chatService.OpenAiItem & {
   type: "message" | "function_call" | "function_call_output";
 };
@@ -35,39 +39,27 @@ function isNonReasoningOpenAiItem(
   return item.type !== "reasoning";
 }
 
-/**
- * Builds enriched field descriptions for the LLM prompt including titles, sample data, and enum options.
- * @param metadataFields - Array of field metadata objects
- * @returns Formatted field descriptions with sample data
- */
 const buildFieldsJsonString = (metadataFields: FieldMetadata[]): string => {
-  let outFields = metadataFields
-    .map((field) => {
-        let outField: any = {
-            completeName: field.completeName,
-            title: field.title,
-        };
+  const outFields = metadataFields.map((field) => {
+    const outField: Record<string, unknown> = {
+      completeName: field.completeName,
+      title: field.title,
+    };
 
-          // Prioritize formatOptions.options for enum fields (more complete)
-      if (field.formatOptions?.options && field.formatOptions.options.length > 0) {
-        const maxOptions = 5;
-        outField.options = field.formatOptions.options.slice(0, maxOptions);
-      }
-      // Otherwise, use custom sampleData if provided
-      else if (field.sampleData && Array.isArray(field.sampleData) && field.sampleData.length > 0) {
-        const maxSamples = 5;
-        outField.sampleData = field.sampleData.slice(0, maxSamples);
-      }
-      return outField;
-    });
-    return JSON.stringify(outFields, null, 2);
+    if (field.formatOptions?.options && field.formatOptions.options.length > 0) {
+      const maxOptions = 5;
+      outField.options = field.formatOptions.options.slice(0, maxOptions);
+    } else if (field.sampleData && Array.isArray(field.sampleData) && field.sampleData.length > 0) {
+      const maxSamples = 5;
+      outField.sampleData = field.sampleData.slice(0, maxSamples);
+    }
+
+    return outField;
+  });
+
+  return JSON.stringify(outFields, null, 2);
 };
 
-
-/**
- * Converts stored AppMessages into the proper OpenAI Responses API input format.
- * Iterates over all AppMessages and flatMaps their openAiItems into ResponseInputItems.
- */
 function buildOpenAIInput(messages: chatService.AppMessage[]): ResponseInputItem[] {
   return messages.flatMap((appMessage) =>
     appMessage.openAiItems
@@ -97,19 +89,49 @@ function buildOpenAIInput(messages: chatService.AppMessage[]): ResponseInputItem
   );
 }
 
+function getAuthenticatedUserId(req: Request, res: Response): string | undefined {
+  if (!req.authenticatedUserId) {
+    res.status(401).json({ message: "Usuário não autenticado." });
+    return undefined;
+  }
+
+  return req.authenticatedUserId;
+}
+
+function handleControllerError(res: Response, error: unknown, defaultMessage: string): Response {
+  if (error instanceof chatService.AuthorizationError) {
+    return res.status(403).json({ message: error.message });
+  }
+
+  if (error instanceof Error && /não encontrada|nao encontrada/i.test(error.message)) {
+    return res.status(404).json({ message: error.message });
+  }
+
+  if (error instanceof Error) {
+    return res.status(500).json({ message: defaultMessage, error: error.message });
+  }
+
+  return res.status(500).json({ message: defaultMessage });
+}
+
 export const startConversation = async (req: Request<{}, {}, StartConversationBody>, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
     const { metadataId, userTextMessage, metadataFields } = req.body;
 
     const fieldDescriptions = buildFieldsJsonString(metadataFields);
 
-    const newConversation = chatService.createConversation(
+    const newConversation = await chatService.createConversation(
       metadataId,
-      metadataFields
+      metadataFields,
+      userId
     );
 
-    // Create user AppMessage with developer + user openAiItems
-    const userAppMessage = chatService.createAppMessage(newConversation.id, {
+    const userAppMessage = await chatService.createAppMessage(newConversation.id, userId, {
       role: "user",
       content: userTextMessage,
       openAiItems: [
@@ -126,23 +148,36 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
       ],
     });
 
-    const allMessages = chatService.getMessagesByConversationId(newConversation.id);
+    const allMessages = await chatService.getMessagesByConversationId(newConversation.id, userId);
     const input = buildOpenAIInput(allMessages);
+
     const { structuredOutput, openAiItems, executionData, errorResponse } =
       await openAiService.createModelResponse(input, metadataId, {
         suggestConversationName: true,
         userTextMessage,
         availableFieldNames: metadataFields
           .map((field) => field.completeName)
-          .filter((fieldName): fieldName is string => typeof fieldName === "string" && fieldName.length > 0),
+          .filter(
+            (fieldName): fieldName is string =>
+              typeof fieldName === "string" && fieldName.length > 0
+          ),
       });
 
+    let conversationToReturn = newConversation;
+
     if (structuredOutput.conversationNameSuggestion) {
-      chatService.updateConversationName(newConversation.id, structuredOutput.conversationNameSuggestion);
+      const updatedConversation = await chatService.updateConversationName(
+        newConversation.id,
+        structuredOutput.conversationNameSuggestion,
+        userId
+      );
+
+      if (updatedConversation) {
+        conversationToReturn = updatedConversation;
+      }
     }
 
-    // Create assistant AppMessage with all openAiItems from the response
-    const assistantAppMessage = chatService.createAppMessage(newConversation.id, {
+    const assistantAppMessage = await chatService.createAppMessage(newConversation.id, userId, {
       role: "assistant",
       parsedContent: structuredOutput,
       executionData,
@@ -151,31 +186,48 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
     });
 
     return res.status(201).json({
-      newConversation,
+      newConversation: conversationToReturn,
       newMessages: [userAppMessage, assistantAppMessage],
     });
-  } catch (error: any) {
-    logger.error("Error initiating conversation:", error);
-    return res.status(500).json({ message: "Erro ao iniciar conversa.", error: error.message });
+  } catch (error: unknown) {
+    logger.error("chat.controller", "Error initiating conversation", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return handleControllerError(res, error, "Erro ao iniciar conversa.");
   }
 };
 
-export const getConversations = async (_req: Request, res: Response) => {
+export const getConversations = async (req: Request, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
-    const conversations = chatService.getConversations();
+    const conversations = await chatService.getConversations(userId);
     return res.json(conversations);
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao buscar conversas.", error: error.message });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao buscar conversas.");
   }
 };
 
 export const getMessagesByConversationId = async (req: Request<{ id: string }>, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
     const { id } = req.params;
-    const messages = chatService.getMessagesByConversationId(parseInt(id));
+    const conversation = await chatService.getConversationById(id, userId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversa não encontrada." });
+    }
+
+    const messages = await chatService.getMessagesByConversationId(id, userId);
     return res.json(messages);
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao buscar mensagens.", error: error.message });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao buscar mensagens.");
   }
 };
 
@@ -183,19 +235,23 @@ export const addUserMessageToConversation = async (
   req: Request<{ id: string }, {}, AddMessageBody>,
   res: Response
 ) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
     const { id } = req.params;
     const { userTextMessage } = req.body;
 
-    const conversation = chatService.getConversationById(parseInt(id));
+    const conversation = await chatService.getConversationById(id, userId);
     if (!conversation) {
-      throw new Error("Conversa não encontrada.");
+      return res.status(404).json({ message: "Conversa não encontrada." });
     }
 
-    const conversationId = parseInt(id);
+    const conversationId = id;
 
-    // Create user AppMessage with single user openAiItem
-    const userAppMessage = chatService.createAppMessage(conversationId, {
+    const userAppMessage = await chatService.createAppMessage(conversationId, userId, {
       role: "user",
       content: userTextMessage,
       openAiItems: [
@@ -207,20 +263,20 @@ export const addUserMessageToConversation = async (
       ],
     });
 
-    const allMessages = chatService.getMessagesByConversationId(conversationId);
+    const allMessages = await chatService.getMessagesByConversationId(conversationId, userId);
     const input = buildOpenAIInput(allMessages);
-
-    console.log("Input para LLM:", JSON.stringify(input, null, 2));
 
     const { structuredOutput, openAiItems, executionData, errorResponse } =
       await openAiService.createModelResponse(input, conversation.metadataId, {
         availableFieldNames: conversation.metadataFields
           .map((field) => field.completeName)
-          .filter((fieldName): fieldName is string => typeof fieldName === "string" && fieldName.length > 0),
+          .filter(
+            (fieldName): fieldName is string =>
+              typeof fieldName === "string" && fieldName.length > 0
+          ),
       });
 
-    // Create assistant AppMessage with all openAiItems from the response
-    const assistantAppMessage = chatService.createAppMessage(conversationId, {
+    const assistantAppMessage = await chatService.createAppMessage(conversationId, userId, {
       role: "assistant",
       parsedContent: structuredOutput,
       executionData,
@@ -229,33 +285,44 @@ export const addUserMessageToConversation = async (
     });
 
     return res.status(201).json({ newMessages: [userAppMessage, assistantAppMessage] });
-  } catch (error: any) {
-    logger.error("Error adding message to conversation:", error);
-    return res
-      .status(500)
-      .json({ message: "Erro ao adicionar mensagem à conversa.", error: error.message });
+  } catch (error: unknown) {
+    logger.error("chat.controller", "Error adding message to conversation", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return handleControllerError(res, error, "Erro ao adicionar mensagem à conversa.");
   }
 };
 
-export const getAllFolders = async (_req: Request, res: Response) => {
+export const getAllFolders = async (req: Request, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
-    const folders = chatService.getAllFolders();
+    const folders = await chatService.getAllFolders(userId);
     return res.json(folders);
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao buscar pastas.", error: error.message });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao buscar pastas.");
   }
 };
 
 export const createFolder = async (req: Request<{}, {}, { name: string }>, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
     const { name } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ message: "Nome da pasta é obrigatório." });
     }
-    const newFolder = chatService.createFolder(name.trim());
+
+    const newFolder = await chatService.createFolder(name.trim(), userId);
     return res.status(201).json(newFolder);
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao criar pasta.", error: error.message });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao criar pasta.");
   }
 };
 
@@ -263,79 +330,170 @@ export const updateFolder = async (
   req: Request<{ id: string }, {}, { name: string }>,
   res: Response
 ) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
     const { id } = req.params;
     const { name } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ message: "Nome da pasta é obrigatório." });
     }
-    const updatedFolder = chatService.updateFolder(parseInt(id), name.trim());
+
+    const updatedFolder = await chatService.updateFolder(id, name.trim(), userId);
     if (!updatedFolder) {
       return res.status(404).json({ message: "Pasta não encontrada." });
     }
+
     return res.json(updatedFolder);
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao atualizar pasta.", error: error.message });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao atualizar pasta.");
   }
 };
 
 export const deleteFolder = async (req: Request<{ id: string }>, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
     const { id } = req.params;
     const deleteConversations = req.query.deleteConversations === "true";
 
-    const success = chatService.deleteFolder(parseInt(id), deleteConversations);
+    const success = await chatService.deleteFolder(id, userId, deleteConversations);
     if (!success) {
       return res.status(404).json({ message: "Pasta não encontrada." });
     }
+
     return res.json({ message: "Pasta excluída com sucesso." });
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao excluir pasta.", error: error.message });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao excluir pasta.");
   }
 };
 
 export const getConversationsByFolder = async (req: Request<{ id: string }>, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
     const { id } = req.params;
-    const folderId = id === "null" ? null : parseInt(id);
-    const conversations = chatService.getConversationsByFolder(folderId);
+    const folderId = id === "null" ? null : id;
+    const conversations = await chatService.getConversationsByFolder(folderId, userId);
     return res.json(conversations);
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao buscar conversas da pasta.", error: error.message });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao buscar conversas da pasta.");
   }
 };
 
 export const moveConversationToFolder = async (
-  req: Request<{ id: string }, {}, { folderId: number | null }>,
+  req: Request<{ id: string }, {}, { folderId: string | null }>,
   res: Response
 ) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
     const { id } = req.params;
     const { folderId } = req.body;
 
-    const conversation = chatService.moveConversationToFolder(parseInt(id), folderId);
+    const conversation = await chatService.moveConversationToFolder(id, folderId, userId);
     if (!conversation) {
       return res.status(404).json({ message: "Conversa não encontrada." });
     }
+
     return res.json(conversation);
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao mover conversa.", error: error.message });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao mover conversa.");
   }
 };
 
 export const searchConversations = async (req: Request, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
   try {
     const query = (req.query.q as string) || "";
     const folderIdParam = req.query.folderId as string | undefined;
 
-    let folderId: number | null | undefined = undefined;
+    let folderId: string | null | undefined;
     if (folderIdParam !== undefined) {
-      folderId = folderIdParam === "null" ? null : parseInt(folderIdParam);
+      folderId = folderIdParam === "null" ? null : folderIdParam;
     }
 
-    const results = chatService.searchConversations(query, folderId);
+    const results = await chatService.searchConversations(query, userId, folderId);
     return res.json(results);
-  } catch (error: any) {
-    return res.status(500).json({ message: "Erro ao buscar conversas.", error: error.message });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao buscar conversas.");
+  }
+};
+
+export const getConversationShares = async (req: Request<{ id: string }>, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
+  try {
+    const { id } = req.params;
+    const shares = await chatService.getConversationShares(id, userId);
+    return res.json(shares);
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao buscar compartilhamentos da conversa.");
+  }
+};
+
+export const shareConversation = async (
+  req: Request<{ id: string }, {}, ShareConversationBody>,
+  res: Response
+) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
+  try {
+    const { id } = req.params;
+    const { sharedWithUserId } = req.body;
+
+    if (!sharedWithUserId || !sharedWithUserId.trim()) {
+      return res.status(400).json({ message: "Usuário para compartilhamento é obrigatório." });
+    }
+
+    const share = await chatService.shareConversation(id, userId, sharedWithUserId);
+    return res.status(201).json(share);
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao compartilhar conversa.");
+  }
+};
+
+export const revokeConversationShare = async (
+  req: Request<{ id: string; sharedWithUserId: string }>,
+  res: Response
+) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
+  try {
+    const { id, sharedWithUserId } = req.params;
+
+    const removed = await chatService.revokeConversationShare(id, userId, sharedWithUserId);
+    if (!removed) {
+      return res.status(404).json({ message: "Compartilhamento não encontrado." });
+    }
+
+    return res.json({ message: "Compartilhamento removido com sucesso." });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao remover compartilhamento da conversa.");
   }
 };

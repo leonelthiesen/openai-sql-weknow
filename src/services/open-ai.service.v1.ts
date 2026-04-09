@@ -3,7 +3,7 @@ import {
     getExtractDataToolDefinition,
     getAskFollowupToolDefinition,
 } from "../models/tool-definitions";
-import type { OpenAiItem } from "./chat.service";
+import type { OpenAiItem } from "./chat.service.js";
 import type { OpenAIResponseSchema } from "../constants";
 import { parseToolArgs, ToolValidationError } from "../utils/tool-args-parser";
 import type { ExtractDataArgs } from "../types/tool-args.types";

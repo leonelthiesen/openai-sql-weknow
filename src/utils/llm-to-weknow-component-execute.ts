@@ -1,16 +1,20 @@
 import {
     LLMAggregateFunction,
+    LLMCalculatedFieldType,
     LLMHavingFilterCondition,
     LLMComparisonOperator,
     LLMWhereFilterCondition,
     LLMHavingFilters,
     LLMStructuredOutput,
     LLMWhereFilters,
+    LLMBooleanOperator,
 } from "../models/llm-structured-output.models";
 import { TComponentApi_TExecutePivotTableCustomInput, TCustomFilterValueMode, TCustomHavingFilter, TCustomHavingFilterRoot, TCustomWhereFilter, TCustomWhereFilterRoot } from "../models/dashboard-object-dto-custom.models";
 import { TGridBaseType } from "../models/TGridBaseType";
 import { TComponentType } from "../models/TComponentType";
 import { TComparisonOperator } from "../models/TComparisonOperator";
+import { TBooleanOperator } from "../models/TBooleanOperator";
+import { TFieldType } from "../models/TFieldType";
 import { TMeasureFunction } from "../models/TMeasureFunction";
 import { TSortDirection } from "../models/TSortDirection";
 
@@ -89,6 +93,41 @@ function toSortDirection(direction: unknown): TSortDirection {
     }
 }
 
+function toBooleanOperator(join: LLMBooleanOperator): TBooleanOperator {
+    switch (join) {
+        case "AND":
+            return TBooleanOperator.boAnd;
+        case "OR":
+            return TBooleanOperator.boOr;
+        default:
+            const exhaustiveCheck: never = join;
+            throw new Error(`Unsupported boolean operator: ${String(exhaustiveCheck)}`);
+    }
+}
+
+function toCalculatedFieldType(dataType: LLMCalculatedFieldType | undefined): TFieldType | undefined {
+    if (dataType === undefined) {
+        return undefined;
+    }
+
+    switch (dataType) {
+        case "String":
+            return TFieldType.ftString;
+        case "Number":
+            return TFieldType.ftFloat;
+        case "Date":
+            return TFieldType.ftDate;
+        case "Time":
+            return TFieldType.ftTime;
+        case "DateTime":
+            return TFieldType.ftDateTime;
+        default: {
+            const exhaustiveCheck: never = dataType;
+            throw new Error(`Unsupported calculated field dataType: ${String(exhaustiveCheck)}`);
+        }
+    }
+}
+
 /**
  * Converte LLMWhereFilters para TCustomWhereFilter
  */
@@ -105,7 +144,7 @@ function convertWhereFilterNode (llmFilters: LLMWhereFilters): TCustomWhereFilte
             : [];
 
         return {
-            join: llmFilters.join,
+            join: toBooleanOperator(llmFilters.join),
             filters: childFilters,
         };
     }
@@ -114,7 +153,7 @@ function convertWhereFilterNode (llmFilters: LLMWhereFilters): TCustomWhereFilte
 
     const filter: TCustomWhereFilter = {
         completeName: condition.completeName,
-        join: condition.join,
+        join: toBooleanOperator(condition.join),
         not: condition.not,
         operator: toComparisonOperator(condition.operator),
     };
@@ -145,7 +184,7 @@ function convertWhereFiltersRoot (llmFilters: LLMWhereFilters): TCustomWhereFilt
     }
 
     return {
-        join: llmFilters.join,
+        join: toBooleanOperator(llmFilters.join),
         filters: llmFilters.filters
             .map(f => convertWhereFilterNode(f))
             .filter(f => f !== undefined) as TCustomWhereFilter[],
@@ -168,7 +207,7 @@ function convertHavingFilterNode (llmFilters: LLMHavingFilters): TCustomHavingFi
             : [];
 
         return {
-            join: llmFilters.join,
+            join: toBooleanOperator(llmFilters.join),
             filters: childFilters,
         };
     }
@@ -177,7 +216,7 @@ function convertHavingFilterNode (llmFilters: LLMHavingFilters): TCustomHavingFi
 
     const filter: TCustomHavingFilter = {
         completeName: condition.completeName,
-        join: condition.join,
+        join: toBooleanOperator(condition.join),
         not: condition.not,
         operator: toComparisonOperator(condition.operator),
         measureFunction: toMeasureFunction(condition.aggregateFunction),
@@ -209,7 +248,7 @@ function convertHavingFiltersRoot (llmFilters: LLMHavingFilters): TCustomHavingF
     }
 
     return {
-        join: llmFilters.join,
+        join: toBooleanOperator(llmFilters.join),
         filters: llmFilters.filters
             .map(f => convertHavingFilterNode(f))
             .filter(f => f !== undefined) as TCustomHavingFilter[],
@@ -246,7 +285,7 @@ export function transformLLMToComponentExecuteInput (
     // Converte os calculated fields
     const calculatedFields = query.calculatedFields?.filter(cf => cf.completeName)?.map(cf => ({
         completeName: cf.completeName,
-        dataType: cf.dataType,
+        dataType: toCalculatedFieldType(cf.dataType),
         formula: cf.formula,
         hasAggregateFunction: cf.hasAggregateFunction,
         hasAnalyticFunction: cf.hasAnalyticFunction,

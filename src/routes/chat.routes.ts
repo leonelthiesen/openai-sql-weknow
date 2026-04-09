@@ -1,5 +1,5 @@
 import express from "express";
-import * as chatController from "../controllers/chat.controller";
+import * as chatController from "../controllers/chat.controller.js";
 
 const router = express.Router();
 
@@ -11,6 +11,9 @@ router.post("/startConversation", chatController.startConversation);
 router.get("/conversations/:id/messages", chatController.getMessagesByConversationId);
 router.post("/conversations/:id/userMessage", chatController.addUserMessageToConversation);
 router.put("/conversations/:id/folder", chatController.moveConversationToFolder);
+router.get("/conversations/:id/shares", chatController.getConversationShares);
+router.post("/conversations/:id/share", chatController.shareConversation);
+router.delete("/conversations/:id/share/:sharedWithUserId", chatController.revokeConversationShare);
 
 router.get("/folders", chatController.getAllFolders);
 router.post("/folders", chatController.createFolder);
