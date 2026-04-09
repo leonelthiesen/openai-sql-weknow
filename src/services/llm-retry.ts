@@ -1,7 +1,7 @@
 import type OpenAI from "openai";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
-import { callOpenAI } from "./openai-call.js";
-import type { OpenAiItem } from "./chat.service.js";
+import { callOpenAI } from "./openai-call";
+import type { OpenAiItem } from "./chat.service";
 
 export const MAX_RETRY_ATTEMPTS = 3;
 

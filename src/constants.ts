@@ -48,6 +48,7 @@ export interface ExtractDataResponse {
   query: object;
   chartConfig?: object;
   conversationNameSuggestion?: string;
+  pivotCsv?: string;
 }
 
 export interface MetadataField {
@@ -60,6 +61,7 @@ export interface AskFollowupResponse {
   message: string;
   userMessageSuggestions: string[];
   conversationNameSuggestion?: string;
+  pivotCsv?: string;
 }
 
 export type OpenAIResponseSchema = ExtractDataResponse | AskFollowupResponse;

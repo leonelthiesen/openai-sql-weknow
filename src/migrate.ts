@@ -1,12 +1,9 @@
 import "dotenv/config";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { runMigrations, sql } from "./db";
 
 async function main(): Promise<void> {
-  const currentFilePath = fileURLToPath(import.meta.url);
-  const currentDirPath = path.dirname(currentFilePath);
-  const migrationsDir = path.join(currentDirPath, "migrations");
+  const migrationsDir = path.join(__dirname, "migrations");
 
   await runMigrations(migrationsDir);
   console.log("Migracoes executadas com sucesso.");

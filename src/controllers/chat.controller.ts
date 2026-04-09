@@ -151,7 +151,7 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
     const allMessages = await chatService.getMessagesByConversationId(newConversation.id, userId);
     const input = buildOpenAIInput(allMessages);
 
-    const { structuredOutput, openAiItems, executionData, errorResponse } =
+    const { structuredOutput, pivotCsv, openAiItems, executionData, errorResponse } =
       await openAiService.createModelResponse(input, metadataId, {
         suggestConversationName: true,
         userTextMessage,
@@ -181,6 +181,7 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
       role: "assistant",
       parsedContent: structuredOutput,
       executionData,
+      pivotCsv,
       errorResponse,
       openAiItems,
     });
@@ -266,7 +267,7 @@ export const addUserMessageToConversation = async (
     const allMessages = await chatService.getMessagesByConversationId(conversationId, userId);
     const input = buildOpenAIInput(allMessages);
 
-    const { structuredOutput, openAiItems, executionData, errorResponse } =
+    const { structuredOutput, pivotCsv, openAiItems, executionData, errorResponse } =
       await openAiService.createModelResponse(input, conversation.metadataId, {
         availableFieldNames: conversation.metadataFields
           .map((field) => field.completeName)
@@ -279,6 +280,7 @@ export const addUserMessageToConversation = async (
     const assistantAppMessage = await chatService.createAppMessage(conversationId, userId, {
       role: "assistant",
       parsedContent: structuredOutput,
+      pivotCsv,
       executionData,
       errorResponse,
       openAiItems,

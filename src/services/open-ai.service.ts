@@ -3,7 +3,7 @@ import {
     getExtractDataToolDefinition,
     getAskFollowupToolDefinition,
 } from "../models/tool-definitions";
-import type { OpenAiItem } from "./chat.service.js";
+import type { OpenAiItem } from "./chat.service";
 import type { OpenAIResponseSchema } from "../constants";
 import { parseToolArgs, ToolValidationError } from "../utils/tool-args-parser";
 import type { ExtractDataArgs } from "../types/tool-args.types";
@@ -17,7 +17,7 @@ import { buildDataSummary, buildTextDataSummary } from "../utils/obfuscate-pivot
 import { generatePivotCSV } from "../utils/pivot-grid-data-csv-transformer";
 import { PivotGridResponse } from "../types/pivot-grid-response.types";
 import type OpenAI from "openai";
-import { requestCorrectedCall, MAX_RETRY_ATTEMPTS } from "./llm-retry.js";
+import { requestCorrectedCall, MAX_RETRY_ATTEMPTS } from "./llm-retry";
 
 interface CreateModelResponseOptions {
     suggestConversationName?: boolean;

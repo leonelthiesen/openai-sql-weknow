@@ -12,7 +12,6 @@
     "test": "vitest"
   },
   "author": "Leonel Thiesen",
-  "type": "module",
   "dependencies": {
     "@faker-js/faker": "^10.3.0",
     "body-parser": "^2.2.2",

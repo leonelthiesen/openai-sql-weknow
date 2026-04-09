@@ -3,7 +3,7 @@
     /* Language and Environment */
     "target": "ES2022",
     "lib": ["ES2022"],
-    "module": "ES2022",
+    "module": "commonjs",
 
     /* Emit */
     "outDir": "./dist",
@@ -13,6 +13,7 @@
     "declarationMap": true,
     "removeComments": true,
     "resolveJsonModule": true,
+    "moduleResolution": "node",
 
     /* Interop Constraints */
     "esModuleInterop": true,

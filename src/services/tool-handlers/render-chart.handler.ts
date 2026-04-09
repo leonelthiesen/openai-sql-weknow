@@ -1,10 +1,10 @@
 import type { ResponseInputItem } from "openai/resources/responses/responses";
-import type { OpenAiItem } from "../chat.service.js";
+import type { OpenAiItem } from "../chat.service";
 import { callOpenAI, extractFunctionCalls } from "../openai-call";
 import { getRenderChartToolDefinition } from "../../models/tool-definitions";
 import { parseToolArgs, ToolValidationError } from "../../utils/tool-args-parser";
 import type { RenderChartArgs } from "../../types/tool-args.types";
-import { requestCorrectedCall, MAX_RETRY_ATTEMPTS } from "../llm-retry.js";
+import { requestCorrectedCall, MAX_RETRY_ATTEMPTS } from "../llm-retry";
 import type { PivotGridResponse } from "../../types/pivot-grid-response.types";
 import type { LLMQuery } from "../../models/llm-structured-output.models";
 import { transformToChartData, type ChartData } from "../../utils/pivot-grid-data-transformer";
