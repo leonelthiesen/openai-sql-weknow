@@ -6,6 +6,7 @@ export interface EnvironmentConfig {
   PORT?: string;
 
   // WeKnow API
+  WEKNOW_API_SCHEME?: string;
   WEKNOW_API_HOST?: string;
   WEKNOW_API_PORT?: string;
   WEKNOW_ACCOUNT_TOKEN?: string;

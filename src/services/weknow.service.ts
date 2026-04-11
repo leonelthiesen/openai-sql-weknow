@@ -44,10 +44,11 @@ export async function getAccessToken(): Promise<string> {
 
   const url = getUrl("TSecurityApi/Authenticate");
 
+  let userName = process.env.WEKNOW_USER_NAME ?? "";
   let passwordEncrypted = encryptWithPublicKey(process.env.WEKNOW_PASSWORD ?? "", publicKey);
 
   const body = {
-    userName: process.env.WEKNOW_USER_NAME ?? "",
+    userName,
     passwordEncrypted,
     clientAppType: process.env.WEKNOW_CLIENT_TYPE ?? "API",
     accountToken,
@@ -77,7 +78,7 @@ export async function getAccessToken(): Promise<string> {
 }
 
 function getUrl(path: string): string {
-  return `http://${process.env.WEKNOW_API_HOST || "localhost"}/weknow/datasnap/rest/${path}`;
+  return `${process.env.WEKNOW_API_SCHEME || "http://"}${process.env.WEKNOW_API_HOST || "localhost"}/weknow/datasnap/rest/${path}`;
 }
 
 function extractWeKnowErrorMessage(body: any, defaultMessage: string): string {

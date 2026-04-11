@@ -30,11 +30,16 @@ export function convertTreeViewInList(treeView: TreeViewField[]): ListField[] {
 }
 
 export function encryptWithPublicKey (plainText: string, publicKeyPem: string) {
+    // Normalizar a chave PEM: remover espaços extras e padronizar quebras de linha
+    const normalizedKey = publicKeyPem
+        .trim()
+        .replace(/\r\n/g, '\n');  // Converter Windows CRLF para LF
+
     const buffer = Buffer.from(plainText, 'utf8');
 
     const encrypted = crypto.publicEncrypt(
         {
-            key: publicKeyPem,
+            key: normalizedKey,
             padding: crypto.constants.RSA_PKCS1_PADDING
         },
         buffer
