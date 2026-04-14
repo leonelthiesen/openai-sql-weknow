@@ -32,7 +32,7 @@ export interface OpenAICallResult {
 export async function callOpenAI(
     input: ResponseInputItem[],
     tools: OpenAI.Responses.Tool[],
-    toolChoice: "required" | "auto" = "required"
+    toolChoice: "required" | "auto" = "auto"
 ): Promise<OpenAICallResult> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= 3; attempt++) {

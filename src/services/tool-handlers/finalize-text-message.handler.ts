@@ -1,8 +1,9 @@
-import type OpenAI from "openai";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import { logger } from "../../utils/logger";
+import { extractResponseText } from "../../utils/extract-response-text";
 import type { OpenAiItem } from "../chat.service";
 import { callOpenAIForMessage } from "../openai-call";
+import { toInputItems } from "../llm-retry";
 
 export interface FinalizeTextMessageResult {
     success: boolean;
@@ -23,30 +24,6 @@ function buildFinalTextDeveloperMessage(): string {
         "Nao invente valores.",
         "Se nao houver dados suficientes para responder com seguranca, diga isso de forma objetiva.",
     ].join("\n");
-}
-
-function extractResponseText(response: OpenAI.Responses.Response): string | undefined {
-    const outputText = (response as any).output_text;
-    if (typeof outputText === "string" && outputText.trim()) {
-        return outputText.trim();
-    }
-
-    for (const item of response.output as any[]) {
-        if (item?.type !== "message" || !Array.isArray(item.content)) continue;
-
-        const chunks: string[] = [];
-        for (const contentPart of item.content) {
-            if (contentPart?.type === "output_text" && typeof contentPart.text === "string") {
-                chunks.push(contentPart.text);
-            }
-        }
-
-        if (chunks.length > 0) {
-            return chunks.join("\n").trim();
-        }
-    }
-
-    return undefined;
 }
 
 export async function handleFinalizeTextMessage(
@@ -74,7 +51,7 @@ export async function handleFinalizeTextMessage(
 
     const finalInput: ResponseInputItem[] = [
         ...baseInput,
-        ...(lastResponseOutput as unknown as ResponseInputItem[]),
+        ...toInputItems(lastResponseOutput),
         {
             type: extractDataCallOutput.type,
             call_id: extractDataCallOutput.callId,

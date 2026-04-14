@@ -6,6 +6,15 @@ import type { OpenAiItem } from "./chat.service";
 export const MAX_RETRY_ATTEMPTS = 3;
 
 /**
+ * Casts response output items to input items. The OpenAI SDK types
+ * response output and input items differently, but the API accepts
+ * output items as input when replaying a conversation.
+ */
+export function toInputItems(output: unknown[]): ResponseInputItem[] {
+    return output as unknown as ResponseInputItem[];
+}
+
+/**
  * Sends an error back to the LLM as a function_call_output and requests a
  * corrected call. Pushes all resulting items (error output, reasoning, new
  * function_call) into openAiItems.
@@ -34,7 +43,7 @@ export async function requestCorrectedCall(params: {
 
     const retryInput: ResponseInputItem[] = [
         ...baseInput,
-        ...(currentResponseOutput as unknown as ResponseInputItem[]),
+        ...toInputItems(currentResponseOutput),
         {
             type: "function_call_output",
             call_id: failedCall.call_id,

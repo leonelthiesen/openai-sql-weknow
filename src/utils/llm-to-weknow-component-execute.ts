@@ -96,6 +96,7 @@ function toSortDirection(direction: unknown): TSortDirection {
 function toBooleanOperator(join: LLMBooleanOperator): TBooleanOperator {
     switch (join) {
         case "AND":
+        case undefined:
             return TBooleanOperator.boAnd;
         case "OR":
             return TBooleanOperator.boOr;

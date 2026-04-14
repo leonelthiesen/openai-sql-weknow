@@ -64,7 +64,15 @@ export interface AskFollowupResponse {
   pivotCsv?: string;
 }
 
-export type OpenAIResponseSchema = ExtractDataResponse | AskFollowupResponse;
+export interface TextResponse {
+  action: "TEXT_RESPONSE";
+  message: string;
+  userMessageSuggestions: string[];
+  conversationNameSuggestion?: string;
+  pivotCsv?: string;
+}
+
+export type OpenAIResponseSchema = ExtractDataResponse | AskFollowupResponse | TextResponse;
 
 export const TEST_SQL = `SELECT
                             company_name,

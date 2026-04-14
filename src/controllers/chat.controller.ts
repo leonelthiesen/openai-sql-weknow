@@ -3,6 +3,7 @@ import type { ResponseInputItem } from "openai/resources/responses/responses";
 import { MetadataField } from "../constants";
 import * as chatService from "../services/chat.service";
 import * as openAiService from "../services/open-ai.service";
+import { generateConversationNameSuggestion } from "../services/open-ai.service";
 import { logger } from "../utils/logger";
 
 interface FieldMetadata extends MetadataField {
@@ -151,10 +152,12 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
     const allMessages = await chatService.getMessagesByConversationId(newConversation.id, userId);
     const input = buildOpenAIInput(allMessages);
 
+    const conversationNamePromise = userTextMessage.trim()
+      ? generateConversationNameSuggestion(userTextMessage)
+      : Promise.resolve(undefined);
+
     const { structuredOutput, pivotCsv, openAiItems, executionData, errorResponse } =
       await openAiService.createModelResponse(input, metadataId, {
-        suggestConversationName: true,
-        userTextMessage,
         availableFieldNames: metadataFields
           .map((field) => field.completeName)
           .filter(
@@ -163,12 +166,17 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
           ),
       });
 
+    const conversationNameSuggestion = await conversationNamePromise;
+    if (conversationNameSuggestion) {
+      structuredOutput.conversationNameSuggestion = conversationNameSuggestion;
+    }
+
     let conversationToReturn = newConversation;
 
-    if (structuredOutput.conversationNameSuggestion) {
+    if (conversationNameSuggestion) {
       const updatedConversation = await chatService.updateConversationName(
         newConversation.id,
-        structuredOutput.conversationNameSuggestion,
+        conversationNameSuggestion,
         userId
       );
 

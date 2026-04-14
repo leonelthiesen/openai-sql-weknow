@@ -2,9 +2,9 @@ import type { ResponseInputItem } from "openai/resources/responses/responses";
 import type { OpenAiItem } from "../chat.service";
 import { callOpenAI, extractFunctionCalls } from "../openai-call";
 import { getRenderChartToolDefinition } from "../../models/tool-definitions";
-import { parseToolArgs, ToolValidationError } from "../../utils/tool-args-parser";
 import type { RenderChartArgs } from "../../types/tool-args.types";
-import { requestCorrectedCall, MAX_RETRY_ATTEMPTS } from "../llm-retry";
+import { toInputItems } from "../llm-retry";
+import { parseWithRetry } from "../parse-with-retry";
 import type { PivotGridResponse } from "../../types/pivot-grid-response.types";
 import type { LLMQuery } from "../../models/llm-structured-output.models";
 import { transformToChartData, type ChartData } from "../../utils/pivot-grid-data-transformer";
@@ -208,7 +208,7 @@ export async function handleRenderChart(
 
     const secondCallInput: ResponseInputItem[] = [
         ...baseInput,
-        ...(lastResponseOutput as unknown as ResponseInputItem[]),
+        ...toInputItems(lastResponseOutput),
         {
             type: extractDataCallOutput.type,
             call_id: extractDataCallOutput.callId || "",
@@ -220,7 +220,8 @@ export async function handleRenderChart(
         } as ResponseInputItem,
     ];
 
-    const { response } = await callOpenAI(secondCallInput, [getRenderChartToolDefinition()]);
+    const chartTools = [getRenderChartToolDefinition()];
+    const { response } = await callOpenAI(secondCallInput, chartTools);
     const chartCalls = extractFunctionCalls(response);
 
     if (chartCalls.length === 0) {
@@ -228,64 +229,30 @@ export async function handleRenderChart(
         return { openAiItems };
     }
 
-    let chartCall = chartCalls[0]!;
-    let chartResponseOutput: unknown[] = response.output;
-    let chartArgs: RenderChartArgs | undefined;
+    const chartCall = chartCalls[0]!;
+    openAiItems.push({
+        type: "function_call",
+        callId: chartCall.call_id,
+        name: chartCall.name,
+        arguments: chartCall.arguments,
+    });
 
-    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-        // Push the function_call BEFORE attempting parse so it's always in history
-        openAiItems.push({
-            type: "function_call",
-            callId: chartCall.call_id,
-            name: chartCall.name,
-            arguments: chartCall.arguments,
-        });
+    const parsed = await parseWithRetry<RenderChartArgs>({
+        call: chartCall,
+        responseOutput: response.output,
+        baseInput: secondCallInput,
+        tools: chartTools,
+        openAiItems,
+    });
 
-        try {
-            chartArgs = parseToolArgs("render_chart_config", chartCall.arguments) as RenderChartArgs;
-            break;
-        } catch (error) {
-            if (!(error instanceof ToolValidationError)) throw error;
-
-            logger.warn("render_chart_config", `Parse failed on attempt ${attempt}/${MAX_RETRY_ATTEMPTS}`, {
-                error: error.message,
-            });
-
-            if (attempt >= MAX_RETRY_ATTEMPTS) {
-                openAiItems.push({
-                    type: "function_call_output",
-                    callId: chartCall.call_id,
-                    output: `Chart config parse failed: ${error.message}`,
-                });
-                logger.error("render_chart_config", "Parse failed on final attempt, returning without chart config");
-                return { openAiItems };
-            }
-
-            const next = await requestCorrectedCall({
-                failedCall: chartCall,
-                errorOutput: `Chart config parse failed: ${error.message}. Please fix and try again.`,
-                currentResponseOutput: chartResponseOutput,
-                baseInput: secondCallInput,
-                tools: [getRenderChartToolDefinition()],
-                openAiItems,
-            });
-
-            if (!next) {
-                return { openAiItems };
-            }
-
-            chartCall = next.call;
-            chartResponseOutput = next.responseOutput;
-        }
-    }
-
-    if (!chartArgs) {
+    if (!parsed) {
+        logger.error("render_chart_config", "Parse failed on final attempt, returning without chart config");
         return { openAiItems };
     }
 
     openAiItems.push({
         type: "function_call_output",
-        callId: chartCall.call_id,
+        callId: parsed.call.call_id,
         output: "OK",
     });
 
@@ -295,8 +262,8 @@ export async function handleRenderChart(
     });
 
     const finalConfig = manifest
-        ? hydrateChartConfig(chartArgs.chartConfig, manifest)
-        : chartArgs.chartConfig;
+        ? hydrateChartConfig(parsed.args.chartConfig, manifest)
+        : parsed.args.chartConfig;
 
     return { chartConfig: finalConfig, openAiItems };
 }
