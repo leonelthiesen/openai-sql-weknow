@@ -213,6 +213,14 @@ export const getConversations = async (req: Request, res: Response) => {
   }
 
   try {
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : "";
+
+    if (search.length > 0) {
+      const results = await chatService.searchConversations(search, userId);
+      return res.json(results);
+    }
+
     const conversations = await chatService.getConversations(userId);
     return res.json(conversations);
   } catch (error: unknown) {
