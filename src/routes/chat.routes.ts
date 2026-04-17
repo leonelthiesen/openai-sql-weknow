@@ -11,6 +11,7 @@ router.post("/startConversation", chatController.startConversation);
 router.get("/conversations/:id/messages", chatController.getMessagesByConversationId);
 router.post("/conversations/:id/userMessage", chatController.addUserMessageToConversation);
 router.put("/conversations/:id/folder", chatController.moveConversationToFolder);
+router.delete("/conversations/:id", chatController.deleteConversation);
 router.get("/conversations/:id/shares", chatController.getConversationShares);
 router.post("/conversations/:id/share", chatController.shareConversation);
 router.delete("/conversations/:id/share/:sharedWithUserId", chatController.revokeConversationShare);

@@ -666,6 +666,17 @@ export async function moveConversationToFolder(
   return rows[0] ? mapConversation(rows[0]) : undefined;
 }
 
+export async function deleteConversation(conversationId: string, userId: string): Promise<boolean> {
+  const rows = await sql<{ id: string }[]>`
+    delete from conversations
+    where id = ${conversationId}
+      and owner_user_id = ${userId}
+    returning id
+  `;
+
+  return rows.length > 0;
+}
+
 export async function updateConversationName(
   conversationId: string,
   name: string,

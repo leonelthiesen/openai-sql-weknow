@@ -434,6 +434,26 @@ export const moveConversationToFolder = async (
   }
 };
 
+export const deleteConversation = async (req: Request<{ id: string }>, res: Response) => {
+  const userId = getAuthenticatedUserId(req, res);
+  if (!userId) {
+    return;
+  }
+
+  try {
+    const { id } = req.params;
+
+    const removed = await chatService.deleteConversation(id, userId);
+    if (!removed) {
+      return res.status(404).json({ message: "Conversa não encontrada." });
+    }
+
+    return res.json({ message: "Conversa excluída com sucesso." });
+  } catch (error: unknown) {
+    return handleControllerError(res, error, "Erro ao excluir conversa.");
+  }
+};
+
 export const searchConversations = async (req: Request, res: Response) => {
   const userId = getAuthenticatedUserId(req, res);
   if (!userId) {
