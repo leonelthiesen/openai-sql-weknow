@@ -314,7 +314,7 @@ export async function createModelResponse(
 
         // ── Build pivot CSV and data output ──────────────────────────────────
         let pivotCsv: string | undefined;
-        if (executionData) {
+        if (executionData && executionData.rows.length > 0) {
             try {
                 pivotCsv = generatePivotCSV(executionData, currentArgs.query);
             } catch {
@@ -323,7 +323,7 @@ export async function createModelResponse(
         }
 
         let dataOutput: string;
-        if (executionData) {
+        if (executionData && executionData.rows.length > 0) {
             dataOutput = currentArgs.renderType === "TEXT"
                 ? buildTextDataSummary(executionData, pivotCsv)
                 : buildDataSummary(executionData, pivotCsv);

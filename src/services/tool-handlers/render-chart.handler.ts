@@ -221,7 +221,7 @@ export async function handleRenderChart(
     ];
 
     const chartTools = [getRenderChartToolDefinition()];
-    const { response } = await callOpenAI(secondCallInput, chartTools);
+    const { response } = await callOpenAI(secondCallInput, chartTools, "required");
     const chartCalls = extractFunctionCalls(response);
 
     if (chartCalls.length === 0) {

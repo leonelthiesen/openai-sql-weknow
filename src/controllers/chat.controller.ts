@@ -20,6 +20,7 @@ interface StartConversationBody {
   metadataId: number;
   userTextMessage: string;
   metadataFields: FieldMetadata[];
+  folderId?: string | null;
 }
 
 interface AddMessageBody {
@@ -122,14 +123,15 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
   }
 
   try {
-    const { metadataId, userTextMessage, metadataFields } = req.body;
+    const { metadataId, userTextMessage, metadataFields, folderId } = req.body;
 
     const fieldDescriptions = buildFieldsJsonString(metadataFields);
 
     const newConversation = await chatService.createConversation(
       metadataId,
       metadataFields,
-      userId
+      userId,
+      folderId
     );
 
     const userAppMessage = await chatService.createAppMessage(newConversation.id, userId, {

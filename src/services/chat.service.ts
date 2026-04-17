@@ -52,6 +52,7 @@ export interface Conversation {
   metadataFields: MetadataField[];
   ownerUserId: string;
   messages?: AppMessage[];
+  firstMessage?: AppMessage | null;
   folderId?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -615,7 +616,32 @@ export async function getConversationsByFolder(
   folderId: string | null,
   userId: string
 ): Promise<Conversation[]> {
-  return getConversations(userId, folderId);
+  const conversations = await getConversations(userId, folderId);
+
+  if (conversations.length === 0) {
+    return conversations;
+  }
+
+  const conversationIds = conversations.map((c) => c.id);
+
+  const firstMessageRows = await sql<Array<AppMessageRow & { conversation_id: string }>>`
+    select distinct on (conversation_id)
+      id, conversation_id, role, user_id, content, parsed_content, pivot_csv, execution_data, error_response, open_ai_items, created_at
+    from app_messages
+    where conversation_id in ${sql(conversationIds)}
+      and role = 'user'
+    order by conversation_id, created_at asc
+  `;
+
+  const firstMessageByConversation = new Map<string, AppMessage>();
+  for (const row of firstMessageRows) {
+    firstMessageByConversation.set(row.conversation_id, mapAppMessage(row));
+  }
+
+  return conversations.map((conversation) => ({
+    ...conversation,
+    firstMessage: firstMessageByConversation.get(conversation.id) ?? null,
+  }));
 }
 
 export async function moveConversationToFolder(

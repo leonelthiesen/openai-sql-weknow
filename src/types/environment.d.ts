@@ -11,6 +11,9 @@ export interface EnvironmentConfig {
   WEKNOW_API_PORT?: string;
   WEKNOW_ACCOUNT_TOKEN?: string;
 
+  // Exchange rate
+  USD_BRL_RATE?: string;
+
   // PostgreSQL
   PGHOST?: string;
   PGPORT?: string;
