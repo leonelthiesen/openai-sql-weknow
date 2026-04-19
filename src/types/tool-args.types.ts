@@ -16,11 +16,6 @@ export interface AskFollowupArgs {
     userMessageSuggestions: string[];
 }
 
-export interface RenderChartArgs {
-    toolName: "render_chart_config";
-    chartConfig: object;
-}
-
 export type TextValuePrimitive = string | number | boolean;
 
 export interface TextValueObject {
@@ -39,5 +34,4 @@ export interface ExtractTextValuesArgs {
 export type ParsedToolArgs =
     | ExtractDataArgs
     | AskFollowupArgs
-    | RenderChartArgs
     | ExtractTextValuesArgs;

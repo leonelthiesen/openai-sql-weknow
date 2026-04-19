@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import { router as chatRoutes } from "./routes/chat.routes";
+import * as jobController from "./controllers/job.controller";
 import bodyParser from "body-parser";
 import cors from "cors";
 import { checkDatabaseConnection, sql } from "./db";
@@ -19,9 +20,23 @@ app.get("/", (_req: Request, res: Response) => {
   res.send("Servidor está rodando!");
 });
 
-app.use("/api/chat", async (req: Request, res: Response, next: NextFunction) => {
-  const rawUserId = req.header("x-user-id");
-  const userId = rawUserId?.trim();
+function readQueryUserId(req: Request): string | undefined {
+  const candidates = [req.query.userId, req.query.user_id, req.query["x-user-id"]];
+
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return undefined;
+}
+
+const authenticateApiUser = async (req: Request, res: Response, next: NextFunction) => {
+  // EventSource does not support custom headers in browsers, so we also accept userId via query.
+  const headerUserId = req.header("x-user-id")?.trim();
+  const queryUserId = readQueryUserId(req);
+  const userId = headerUserId ?? queryUserId;
 
   if (!userId) {
     return res.status(401).json({ message: "Usuário não autenticado." });
@@ -40,9 +55,15 @@ app.use("/api/chat", async (req: Request, res: Response, next: NextFunction) => 
     console.error("Falha ao validar usuário autenticado:", error);
     return res.status(500).json({ message: "Erro ao autenticar usuário." });
   }
-});
+};
+
+app.use("/api/chat", authenticateApiUser);
 
 app.use("/api/chat", chatRoutes);
+
+// Compatibility aliases for frontend clients using /api/jobs instead of /api/chat/jobs
+app.get("/api/jobs/:jobId/events", authenticateApiUser, jobController.getJobEvents);
+app.get("/api/jobs/:jobId", authenticateApiUser, jobController.getJobStatus);
 
 async function startServer(): Promise<void> {
   await checkDatabaseConnection();

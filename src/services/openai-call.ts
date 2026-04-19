@@ -1,6 +1,8 @@
 import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 import { MODEL_INSTRUCTIONS } from "../constants";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
+import type { z } from "zod/v4";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -53,7 +55,6 @@ function logCost(usage: OpenAI.Responses.Response["usage"]): void {
 export interface OpenAICallResult {
     response: OpenAI.Responses.Response;
     functionCalls: OpenAI.Responses.ResponseFunctionToolCall[];
-    reasoningItems: OpenAI.Responses.ResponseOutputItem[];
 }
 
 export async function callOpenAI(
@@ -72,9 +73,8 @@ export async function callOpenAI(
                 tool_choice: toolChoice,
             });
             const functionCalls = extractFunctionCalls(response);
-            const reasoningItems = response.output.filter((item) => item.type === "reasoning");
             logCost(response.usage);
-            return { response, functionCalls, reasoningItems };
+            return { response, functionCalls };
         } catch (error) {
             lastError = error;
             if (attempt < 3 && isTransientOpenAIError(error)) {
@@ -100,6 +100,38 @@ export async function callOpenAIForMessage(
             });
             logCost(response.usage);
             return response;
+        } catch (error) {
+            lastError = error;
+            if (attempt < 3 && isTransientOpenAIError(error)) {
+                await sleep(1000);
+                continue;
+            }
+            throw error;
+        }
+    }
+    throw lastError;
+}
+
+export async function callOpenAIForStructuredMessage<T extends z.ZodTypeAny>(
+    input: ResponseInputItem[],
+    schema: T,
+    schemaName: string
+): Promise<{ response: OpenAI.Responses.Response; parsed: z.infer<T> }> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            const response = await openai.responses.parse({
+                ...SHARED_OPTIONS,
+                instructions: MODEL_INSTRUCTIONS,
+                input,
+                text: { format: zodTextFormat(schema, schemaName) },
+            });
+            logCost(response.usage);
+            const parsed = response.output_parsed as z.infer<T> | null;
+            if (parsed === null) {
+                throw new Error("LLM não retornou conteúdo estruturado (recusa ou saída vazia)");
+            }
+            return { response, parsed };
         } catch (error) {
             lastError = error;
             if (attempt < 3 && isTransientOpenAIError(error)) {

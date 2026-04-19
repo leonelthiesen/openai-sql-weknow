@@ -13,7 +13,7 @@
     "declarationMap": true,
     "removeComments": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
 
     /* Interop Constraints */
     "esModuleInterop": true,

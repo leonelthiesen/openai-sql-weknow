@@ -51,9 +51,9 @@ export async function requestCorrectedCall(params: {
         } as ResponseInputItem,
     ];
 
-    const { response, functionCalls, reasoningItems } = await callOpenAI(retryInput, tools);
+    const { response, functionCalls } = await callOpenAI(retryInput, tools);
 
-    for (const item of reasoningItems) {
+    for (const item of response.output.filter((item) => item.type === "reasoning")) {
         openAiItems.push({ type: "reasoning", reasoningItem: item });
     }
 

@@ -2,9 +2,9 @@ import { type Request, type Response } from "express";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import { MetadataField } from "../constants";
 import * as chatService from "../services/chat.service";
-import * as openAiService from "../services/open-ai.service";
-import { generateConversationNameSuggestion } from "../services/open-ai.service";
 import { logger } from "../utils/logger";
+import { jobStore } from "../pipeline/job-store";
+import { runPipeline } from "../pipeline/pipeline-orchestrator";
 
 interface FieldMetadata extends MetadataField {
   title?: string;
@@ -154,51 +154,38 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
     const allMessages = await chatService.getMessagesByConversationId(newConversation.id, userId);
     const input = buildOpenAIInput(allMessages);
 
-    const conversationNamePromise = userTextMessage.trim()
-      ? generateConversationNameSuggestion(userTextMessage)
-      : Promise.resolve(undefined);
-
-    const { structuredOutput, pivotCsv, openAiItems, executionData, errorResponse } =
-      await openAiService.createModelResponse(input, metadataId, {
+    const job = jobStore.createJob({
+      conversationId: newConversation.id,
+      userId,
+      metadataId,
+      input,
+      options: {
         availableFieldNames: metadataFields
           .map((field) => field.completeName)
           .filter(
             (fieldName): fieldName is string =>
               typeof fieldName === "string" && fieldName.length > 0
           ),
-      });
+      },
+    });
+    job.userMessageId = userAppMessage.id;
 
-    const conversationNameSuggestion = await conversationNamePromise;
-    if (conversationNameSuggestion) {
-      structuredOutput.conversationNameSuggestion = conversationNameSuggestion;
-    }
-
-    let conversationToReturn = newConversation;
-
-    if (conversationNameSuggestion) {
-      const updatedConversation = await chatService.updateConversationName(
-        newConversation.id,
-        conversationNameSuggestion,
-        userId
-      );
-
-      if (updatedConversation) {
-        conversationToReturn = updatedConversation;
-      }
-    }
-
-    const assistantAppMessage = await chatService.createAppMessage(newConversation.id, userId, {
-      role: "assistant",
-      parsedContent: structuredOutput,
-      executionData,
-      pivotCsv,
-      errorResponse,
-      openAiItems,
+    jobStore.emitEvent(job.id, {
+      type: "job_created",
+      payload: { jobId: job.id, conversationId: newConversation.id },
     });
 
-    return res.status(201).json({
-      newConversation: conversationToReturn,
-      newMessages: [userAppMessage, assistantAppMessage],
+    // Fire pipeline — not awaited
+    runPipeline(job, userTextMessage).catch((error) => {
+      logger.error("chat.controller", "Pipeline failed unexpectedly", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+
+    return res.status(202).json({
+      jobId: job.id,
+      newConversation,
+      userMessage: userAppMessage,
     });
   } catch (error: unknown) {
     logger.error("chat.controller", "Error initiating conversation", {
@@ -285,26 +272,38 @@ export const addUserMessageToConversation = async (
     const allMessages = await chatService.getMessagesByConversationId(conversationId, userId);
     const input = buildOpenAIInput(allMessages);
 
-    const { structuredOutput, pivotCsv, openAiItems, executionData, errorResponse } =
-      await openAiService.createModelResponse(input, conversation.metadataId, {
+    const job = jobStore.createJob({
+      conversationId,
+      userId,
+      metadataId: conversation.metadataId,
+      input,
+      options: {
         availableFieldNames: conversation.metadataFields
           .map((field) => field.completeName)
           .filter(
             (fieldName): fieldName is string =>
               typeof fieldName === "string" && fieldName.length > 0
           ),
-      });
+      },
+    });
+    job.userMessageId = userAppMessage.id;
 
-    const assistantAppMessage = await chatService.createAppMessage(conversationId, userId, {
-      role: "assistant",
-      parsedContent: structuredOutput,
-      pivotCsv,
-      executionData,
-      errorResponse,
-      openAiItems,
+    jobStore.emitEvent(job.id, {
+      type: "job_created",
+      payload: { jobId: job.id, conversationId },
     });
 
-    return res.status(201).json({ newMessages: [userAppMessage, assistantAppMessage] });
+    // Fire pipeline — not awaited
+    runPipeline(job).catch((error) => {
+      logger.error("chat.controller", "Pipeline failed unexpectedly", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+
+    return res.status(202).json({
+      jobId: job.id,
+      userMessage: userAppMessage,
+    });
   } catch (error: unknown) {
     logger.error("chat.controller", "Error adding message to conversation", {
       error: error instanceof Error ? error.message : String(error),

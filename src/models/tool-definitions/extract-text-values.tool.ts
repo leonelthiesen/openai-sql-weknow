@@ -9,7 +9,7 @@ export function getExtractTextValuesToolDefinition(): FunctionTool {
     name: "extract_text_values",
     description: description(
       "Extract the numeric/textual values that must be used to compose the final user-facing TEXT answer.",
-      "Use this tool after extract_data succeeds and data summary/CSV context is available.",
+      "Use this tool after extract_data succeeds and data summary context is available.",
       "Return one or more values as a list.",
       "Values can be primitive or structured objects with label/value/unit.",
       "Do not write the final user message here; only provide values.",

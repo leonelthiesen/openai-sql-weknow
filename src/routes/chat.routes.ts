@@ -1,5 +1,6 @@
 import express from "express";
 import * as chatController from "../controllers/chat.controller";
+import * as jobController from "../controllers/job.controller";
 
 const router = express.Router();
 
@@ -15,6 +16,10 @@ router.delete("/conversations/:id", chatController.deleteConversation);
 router.get("/conversations/:id/shares", chatController.getConversationShares);
 router.post("/conversations/:id/share", chatController.shareConversation);
 router.delete("/conversations/:id/share/:sharedWithUserId", chatController.revokeConversationShare);
+
+// Job pipeline endpoints
+router.get("/jobs/:jobId/events", jobController.getJobEvents);
+router.get("/jobs/:jobId", jobController.getJobStatus);
 
 router.get("/folders", chatController.getAllFolders);
 router.post("/folders", chatController.createFolder);

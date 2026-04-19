@@ -5,7 +5,6 @@ export interface LLMStructuredOutput {
     message: string;
     userMessageSuggestions: string[];
     query: LLMQuery;
-    chartConfig?: object;
     renderType: 'CHART' | 'TABLE' | 'TEXT';
 }
 

@@ -46,9 +46,7 @@ export interface ExtractDataResponse {
   message: string;
   userMessageSuggestions: string[];
   query: object;
-  chartConfig?: object;
   conversationNameSuggestion?: string;
-  pivotCsv?: string;
 }
 
 export interface MetadataField {
@@ -61,7 +59,6 @@ export interface AskFollowupResponse {
   message: string;
   userMessageSuggestions: string[];
   conversationNameSuggestion?: string;
-  pivotCsv?: string;
 }
 
 export interface TextResponse {
@@ -69,7 +66,6 @@ export interface TextResponse {
   message: string;
   userMessageSuggestions: string[];
   conversationNameSuggestion?: string;
-  pivotCsv?: string;
 }
 
 export type OpenAIResponseSchema = ExtractDataResponse | AskFollowupResponse | TextResponse;
@@ -132,180 +128,3 @@ export interface GridConfig {
   };
   style: Record<string, any>;
 }
-
-export interface ChartColorItem {
-  color: string;
-  text: string;
-}
-
-export interface ChartSerie {
-  percentualFormatOptions: {
-    format: number;
-    suffix: string;
-    decimals: number;
-  };
-  color: {
-    mode: number;
-    list: ChartColorItem[];
-    listColorEachPoint: boolean;
-  };
-  values: {
-    visible: number;
-    text: string;
-    showFrame: boolean;
-    showSymbol: boolean;
-    inside: boolean;
-    orientation: number;
-  };
-  lineBorderSize: number;
-  stackGroup: number;
-  axisHIndex: number;
-  axisVIndex: number;
-  spline: boolean;
-  hintText: string;
-  legendText: string;
-  centralText: string;
-}
-
-export interface ChartAxis {
-  visible?: boolean;
-  increment: number;
-  incrementValue: number;
-  showLines?: boolean;
-}
-
-export interface ChartConfig {
-  version: string;
-  type: ObjectTypes;
-  viewAllowed: boolean;
-  title: {
-    text: string;
-  };
-  data: {
-    metadataId: number;
-    immediately: boolean;
-    autoLink: {
-      disableAutoLink: boolean;
-    };
-    values: any[];
-    labels: any[];
-    axis: {
-      left: ChartAxis;
-      top: ChartAxis;
-      right: ChartAxis;
-      bottom: ChartAxis;
-    };
-    defaultSerie: ChartSerie;
-  };
-  style: Record<string, any>;
-}
-
-export const baseGridConfig: GridConfig = {
-  version: "4.4.0",
-  type: ObjectTypes.Table,
-  viewAllowed: true,
-  title: {
-    text: "Título",
-  },
-  data: {
-    metadataId: -1,
-    immediately: true,
-    autoScroll: {
-      mode: 0,
-    },
-    defaultColumn: {
-      header: {
-        visible: true,
-      },
-      sizeMode: 2,
-    },
-    customLabelViews: {
-      enabled: false,
-    },
-    gridBaseType: ObjectGridTypes.Monodimensional,
-    columns: [],
-    style: {},
-  },
-  style: {},
-};
-
-export const baseChartConfig: ChartConfig = {
-  version: "4.4.0",
-  type: ObjectTypes.Chart,
-  viewAllowed: true,
-  title: {
-    text: "Título",
-  },
-  data: {
-    metadataId: -1,
-    immediately: true,
-    autoLink: {
-      disableAutoLink: false,
-    },
-    values: [],
-    labels: [],
-    axis: {
-      left: {
-        increment: 2,
-        incrementValue: 4,
-        showLines: true,
-      },
-      top: {
-        increment: 2,
-        incrementValue: 4,
-      },
-      right: {
-        increment: 2,
-        incrementValue: 4,
-        showLines: true,
-      },
-      bottom: {
-        visible: true,
-        increment: 2,
-        incrementValue: 4,
-      },
-    },
-    defaultSerie: {
-      percentualFormatOptions: {
-        format: 1,
-        suffix: "%",
-        decimals: 2,
-      },
-      color: {
-        mode: 2,
-        list: [
-          {
-            color: "~chartpoints:0",
-            text: "",
-          },
-          {
-            color: "~chartpoints:1",
-            text: "",
-          },
-          {
-            color: "~chartpoints:2",
-            text: "",
-          },
-        ],
-        listColorEachPoint: false,
-      },
-      values: {
-        visible: 1,
-        text: "%$value%",
-        showFrame: true,
-        showSymbol: false,
-        inside: false,
-        orientation: 0,
-      },
-      lineBorderSize: 1,
-      stackGroup: 0,
-      axisHIndex: 0,
-      axisVIndex: 0,
-      spline: false,
-      hintText: "%$serieTitleValues%: %$value%%$labelExt%",
-      legendText: "",
-      centralText: "",
-    },
-  },
-  style: {},
-};

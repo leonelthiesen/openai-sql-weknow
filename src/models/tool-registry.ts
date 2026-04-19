@@ -3,7 +3,6 @@ import {
     getExtractDataToolDefinition,
     getAskFollowupToolDefinition,
     getExtractTextValuesToolDefinition,
-    getRenderChartToolDefinition,
 } from "./tool-definitions";
 
 type FunctionTool = OpenAI.Responses.FunctionTool;
@@ -19,7 +18,6 @@ const registry: ToolRegistration[] = [
     { definition: getExtractDataToolDefinition(), phase: "primary" },
     { definition: getAskFollowupToolDefinition(), phase: "primary" },
     { definition: getExtractTextValuesToolDefinition(), phase: "secondary" },
-    { definition: getRenderChartToolDefinition(), phase: "secondary" },
 ];
 
 export function getToolsForPhase(phase: ToolPhase): FunctionTool[] {

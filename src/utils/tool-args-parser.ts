@@ -2,7 +2,6 @@ import type {
     ParsedToolArgs,
     ExtractDataArgs,
     AskFollowupArgs,
-    RenderChartArgs,
     ExtractTextValuesArgs,
 } from "../types/tool-args.types";
 
@@ -48,9 +47,6 @@ export function parseToolArgs(name: string, rawArguments: string, options: Parse
             return parseExtractDataArgs(parsed, options.availableFieldNames);
         case "ask_followup":
             return parseAskFollowupArgs(parsed);
-        case "render_chart_config":
-            parsed.chartConfig = typeof parsed.chartConfig === "string" ? JSON.parse(parsed.chartConfig) : parsed.chartConfig;
-            return parseRenderChartArgs(parsed);
         case "extract_text_values":
             return parseExtractTextValuesArgs(parsed);
         default:
@@ -309,20 +305,6 @@ function parseAskFollowupArgs(parsed: any): AskFollowupArgs {
         toolName: "ask_followup",
         message: parsed.message,
         userMessageSuggestions: parsed.userMessageSuggestions ?? [],
-    };
-}
-
-function parseRenderChartArgs(parsed: any): RenderChartArgs {
-    if (!parsed.chartConfig || typeof parsed.chartConfig !== "object") {
-        throw new ToolValidationError("render_chart_config", "Missing or invalid 'chartConfig'");
-    }
-    if (!Array.isArray(parsed.chartConfig.series) || parsed.chartConfig.series.length === 0) {
-        throw new ToolValidationError("render_chart_config", "chartConfig.series must be a non-empty array");
-    }
-
-    return {
-        toolName: "render_chart_config",
-        chartConfig: parsed.chartConfig,
     };
 }
 
