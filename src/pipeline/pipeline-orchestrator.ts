@@ -6,7 +6,6 @@ import type { OpenAiItem } from "../services/chat.service";
 import * as chatService from "../services/chat.service";
 import { callOpenAI } from "../services/openai-call";
 import { parseWithRetry } from "../services/parse-with-retry";
-import { generateConversationNameSuggestion } from "../services/open-ai.service";
 import { extractResponseText } from "../utils/extract-response-text";
 import { logger } from "../utils/logger";
 import { jobStore, type Job } from "./job-store";
@@ -23,7 +22,7 @@ const PARSE_FALLBACK_SUGGESTIONS = [
     "Tente uma consulta mais simples e direta",
 ];
 
-export async function runPipeline(job: Job, userTextMessage?: string): Promise<void> {
+export async function runPipeline(job: Job): Promise<void> {
     const { id: jobId, conversationId, userId, metadataId, input, options } = job;
     const openAiItems: OpenAiItem[] = [];
 
@@ -34,10 +33,6 @@ export async function runPipeline(job: Job, userTextMessage?: string): Promise<v
             payload: { jobId },
         });
 
-        // ── Conversation name suggestion (fire-and-forget, parallel) ─────────
-        const conversationNamePromise = userTextMessage?.trim()
-            ? generateConversationNameSuggestion(userTextMessage)
-            : Promise.resolve(undefined);
 
         // ── First LLM call ───────────────────────────────────────────────────
         const primaryTools = [getExtractDataToolDefinition(), getAskFollowupToolDefinition()];
@@ -174,13 +169,6 @@ export async function runPipeline(job: Job, userTextMessage?: string): Promise<v
             chartHtml: stageResult.chartHtml,
             openAiItems: stageResult.openAiItems,
         });
-
-        // ── Apply conversation name suggestion ──────────────────────────────
-        const conversationNameSuggestion = await conversationNamePromise;
-        if (conversationNameSuggestion) {
-            stageResult.structuredOutput.conversationNameSuggestion = conversationNameSuggestion;
-            await chatService.updateConversationName(conversationId, conversationNameSuggestion, userId);
-        }
 
         // ── Emit: completed ──────────────────────────────────────────────────
         jobStore.emitEvent(jobId, {

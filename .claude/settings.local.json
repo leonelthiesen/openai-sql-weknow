@@ -8,7 +8,8 @@
       "Bash(grep -r executionData C:/ProjetosGit/openai-sql-weknow/vanna --include=*.ts --include=*.tsx)",
       "Bash(npx vitest:*)",
       "Bash(find /c/ProjetosGit/openai-sql-weknow -name *.json -path */data/*)",
-      "Bash(xargs ls:*)"
+      "Bash(xargs ls:*)",
+      "Bash(xargs grep *)"
     ]
   }
 }

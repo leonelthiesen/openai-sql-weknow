@@ -18,7 +18,7 @@ export interface Job {
     userId: string;
     metadataId: number;
     input: ResponseInputItem[];
-    options?: { availableFieldNames?: string[] };
+    options?: { availableFieldNames?: string[]; };
     userMessageId?: string;
     result?: JobResult;
     error?: string;
@@ -65,7 +65,7 @@ class JobStore {
         userId: string;
         metadataId: number;
         input: ResponseInputItem[];
-        options?: { availableFieldNames?: string[] };
+        options?: { availableFieldNames?: string[]; conversationName?: string };
     }): Job {
         const id = randomUUID();
         const job: Job = {

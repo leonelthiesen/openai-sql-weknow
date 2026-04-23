@@ -2,6 +2,7 @@ import { type Request, type Response } from "express";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import { MetadataField } from "../constants";
 import * as chatService from "../services/chat.service";
+import { generateConversationNameSuggestion } from "../services/open-ai.service";
 import { logger } from "../utils/logger";
 import { jobStore } from "../pipeline/job-store";
 import { runPipeline } from "../pipeline/pipeline-orchestrator";
@@ -151,8 +152,16 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
       ],
     });
 
-    const allMessages = await chatService.getMessagesByConversationId(newConversation.id, userId);
+    const [allMessages, conversationName] = await Promise.all([
+      chatService.getMessagesByConversationId(newConversation.id, userId),
+      generateConversationNameSuggestion(userTextMessage),
+    ]);
     const input = buildOpenAIInput(allMessages);
+
+    if (conversationName) {
+      await chatService.updateConversationName(newConversation.id, conversationName, userId);
+      newConversation.name = conversationName;
+    }
 
     const job = jobStore.createJob({
       conversationId: newConversation.id,
@@ -166,6 +175,7 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
             (fieldName): fieldName is string =>
               typeof fieldName === "string" && fieldName.length > 0
           ),
+        conversationName,
       },
     });
     job.userMessageId = userAppMessage.id;
@@ -176,7 +186,7 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
     });
 
     // Fire pipeline — not awaited
-    runPipeline(job, userTextMessage).catch((error) => {
+    runPipeline(job).catch((error) => {
       logger.error("chat.controller", "Pipeline failed unexpectedly", {
         error: error instanceof Error ? error.message : String(error),
       });

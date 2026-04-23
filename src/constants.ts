@@ -46,7 +46,6 @@ export interface ExtractDataResponse {
   message: string;
   userMessageSuggestions: string[];
   query: object;
-  conversationNameSuggestion?: string;
 }
 
 export interface MetadataField {
@@ -58,14 +57,12 @@ export interface AskFollowupResponse {
   action: "FOLLOWUP_NEEDED";
   message: string;
   userMessageSuggestions: string[];
-  conversationNameSuggestion?: string;
 }
 
 export interface TextResponse {
   action: "TEXT_RESPONSE";
   message: string;
   userMessageSuggestions: string[];
-  conversationNameSuggestion?: string;
 }
 
 export type OpenAIResponseSchema = ExtractDataResponse | AskFollowupResponse | TextResponse;
