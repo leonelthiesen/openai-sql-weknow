@@ -17,7 +17,7 @@ export interface GenerateChartHtmlResult {
 }
 
 function buildChartHtmlPrompt(config: ChartConfig): string {
-    return `You are a data visualization code generator.
+    return `You are a data visualization (Apache ECharts specialist) code generator.
 You will receive a chart configuration JSON and must generate a self-contained HTML file that renders the chart using Apache ECharts.
 
 ## Input
@@ -67,8 +67,8 @@ If meta.truncated is true, add a footnote: "Exibindo primeiros N registros"
 - Initialize ECharts on that div
 - Read data exclusively from \`window.CHART_DATA\`
 - If \`window.CHART_DATA\` is undefined or empty, display a centered message: "Sem dados disponíveis"
-- Apply the title from config
 - Always include a tooltip and, when relevant, a legend
+- Do not create a title
 
 ### Encoding → ECharts mapping per chart type
 
@@ -110,10 +110,7 @@ If meta.truncated is true, add a footnote: "Exibindo primeiros N registros"
 
 ### Style
 - Background: transparent
-- Font: sans-serif
-- Use ECharts default color palette
-- Tooltip: show field labels from encodings (not raw field names)
-- Axis labels: use the \`label\` property from each encoding when available
+- Font: Inter, sans-serif
 
 ## Output format
 

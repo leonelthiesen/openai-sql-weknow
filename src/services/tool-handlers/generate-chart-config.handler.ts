@@ -14,18 +14,17 @@ export interface GenerateChartConfigResult {
 
 function buildChartConfigPrompt(schema: string): string {
     return [
-        "You are a data visualization assistant.",
-        "Given a SQL view schema and a user request, return ONLY a JSON config",
-        "for a chart — no explanation, no markdown, no code.",
+        "You are a data visualization specialist.",
+        "Given a SQL view schema and a user request, return ONLY a JSON config for a chart — no explanation, no markdown, no code.",
         "",
         "Rules:",
         "- Use only fields that exist in the schema",
         "- Choose the most appropriate chart_type for the request",
         "- Map fields to visual encodings: x, y, color, size, theta, label",
         "- Each encoding must include: field, type (quantitative | nominal | ordinal | temporal), label",
-        "- Available chart types: bar, line, pie, donut, scatter, bubble, heatmap, histogram, area",
+        "- Available chart types: bar, line, area, pie, donut, scatter, bubble, heatmap, histogram",
         "- The SQL query will handle all grouping and aggregation.",
-        "- Assume the data in window.CHART_DATA is already in its final aggregated form.",
+        "- Assume the data is already in its final aggregated form.",
         "",
         `Schema: ${schema}`
     ].join("\n");

@@ -9,9 +9,10 @@ export function getExtractDataToolDefinition(): FunctionTool {
     name: "extract_data",
     description: description(
       "You are a helpful assistant. Your task is to extract the user's data analysis intent and translate it into a structured query definition that can be executed against a virtual table.",
+      "Use this tool when the user is asking for data or insights from the data, even if they don't explicitly ask for a chart or table. Your job is to understand the user's underlying data needs and provide a structured query definition that can fulfill those needs.",
       "The virtual table fields are defined in the conversation context.",
       "You will receive as a result, an schema of the columns with a obfuscated data limited to 10 records, to help you understand the data types and values. Use this information to better infer the user's intent.",
-      "The result will be rendered as a chart with spreadsheet, a standalone spreadsheet, or a user friendly message depending on renderType.",
+      "The result will be rendered as a chart (with option to view in a data table), a data table, or a user friendly message depending on renderType.",
       "If any required detail is missing or ambiguous, call ask_followup instead.",
     ),
     parameters: {
@@ -37,10 +38,11 @@ export function getExtractDataToolDefinition(): FunctionTool {
           type: "string",
           description: description(
             "Determines how the query result data should be rendered.",
-            "Choose using this policy: CHART when the user explicitly asks for a chart/graph or when visual comparison is the clearest answer;",
-            "TABLE when row-level detail, listing, or comparisons across many records are needed;",
-            "TEXT ONLY when the result is a single scalar summary (for example, one KPI value).",
-            "If unclear, default to TABLE."
+            "Choose using this policy: ",
+            "- 'CHART' when is the clearest way to present the data or when user explicitly asks for a chart/graph;",
+            "- 'TABLE' when row-level detail, listing, or comparisons across many records are needed;",
+            "- 'TEXT' when the result is a single scalar summary (for example, one KPI value).",
+            "If unclear, default to 'TABLE'."
           ),
           enum: ["CHART", "TABLE", "TEXT"],
         },
@@ -49,7 +51,7 @@ export function getExtractDataToolDefinition(): FunctionTool {
           description: description(
             // "Query definitions: calculated fields, series dimensions, category dimensions, measures, sorting, pre-aggregation filters (WHERE), and post-aggregation filters (HAVING).",
             "This query will not be displayed directly to the user.",
-            "The result data will be rendered (as table, chart or text) separately right after your message.",
+            "The result data will be rendered (as chart, data table or text) separately right after your message.",
             "In general, do not repeat the same field in both seriesDimensions and categoryDimensions.",
             "Always use sorting, either by category using 'categorySort' or by series using 'seriesSort'.",
           ),

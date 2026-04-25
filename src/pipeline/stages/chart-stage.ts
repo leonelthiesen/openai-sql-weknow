@@ -37,6 +37,12 @@ function buildFallbackResult(
     openAiItems: OpenAiItem[],
     extras?: { executionData?: PivotGridResponse; errorResponse?: string | Object }
 ): StageResult {
+    openAiItems.push({
+        type: "function_call",
+        callId,
+        name: "ask_followup",
+        arguments: JSON.stringify({ toolName: "ask_followup", message, userMessageSuggestions: suggestions }),
+    });
     const result = handleAskFollowup(
         { toolName: "ask_followup", message, userMessageSuggestions: suggestions },
         callId
@@ -141,7 +147,7 @@ export async function runChartStage(params: ChartStageParams): Promise<StageResu
         },
         onDataReceived: (rowCount) => {
             jobStore.emitEvent(jobId, {
-                type: "data_received",
+                type: "data_extracted",
                 payload: { jobId, rowCount },
             });
         },
@@ -193,11 +199,11 @@ export async function runChartStage(params: ChartStageParams): Promise<StageResu
             reason: configResult.failureReason,
         });
         return buildFallbackResult(
-            "Nao consegui gerar a configuracao do grafico. Pode reformular sua pergunta com mais detalhes sobre a visualizacao desejada?",
+            "Nao consegui gerar a configuração do gráfico. Pode reformular sua pergunta com mais detalhes sobre a visualização desejada?",
             [
-                "Quero um grafico de barras com vendas por mes",
-                "Mostre como tabela em vez de grafico",
-                "Especifique o tipo de grafico que deseja",
+                "Quero um gráfico de barras com vendas por mês",
+                "Mostre como tabela em vez de gráfico",
+                "Especifique o tipo de gráfico que deseja",
             ],
             `${finalCall.call_id}-chart-config-failed`,
             openAiItems,

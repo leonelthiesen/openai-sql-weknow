@@ -100,7 +100,7 @@ export async function runPipeline(job: Job): Promise<void> {
                         message: "Nao consegui processar a resposta gerada. Pode reformular sua pergunta para eu tentar novamente?",
                         userMessageSuggestions: PARSE_FALLBACK_SUGGESTIONS,
                     },
-                    `${primaryCall.call_id}-primary-parse-error`
+                    primaryCall.call_id
                 );
                 openAiItems.push(...fallback.openAiItems);
                 stageResult = {
@@ -193,6 +193,12 @@ export async function runPipeline(job: Job): Promise<void> {
 
         // Attempt to persist a fallback assistant message
         try {
+            openAiItems.push({
+                type: "function_call",
+                callId: "top-level-error",
+                name: "ask_followup",
+                arguments: JSON.stringify({ toolName: "ask_followup", message: "Ocorreu um erro inesperado ao processar sua solicitacao. Tente novamente.", userMessageSuggestions: ["Reformule a pergunta", "Tente uma consulta mais simples"] }),
+            });
             const fallback = handleAskFollowup(
                 {
                     toolName: "ask_followup",

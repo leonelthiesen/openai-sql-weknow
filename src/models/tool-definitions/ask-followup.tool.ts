@@ -8,7 +8,7 @@ export function getAskFollowupToolDefinition(): FunctionTool {
     type: "function",
     name: "ask_followup",
     description: description(
-      "Ask the user for clarification when the request is ambiguous or missing required details.",
+      "Ask the user for clarification when the user request is ambiguous or missing required details.",
       "Use this tool when required filters, date ranges, grouping level, or metric intent are missing.",
       "Call this instead of guessing or silently assuming defaults that change query meaning.",
       "Ask one focused clarification at a time and provide actionable suggestion options.",

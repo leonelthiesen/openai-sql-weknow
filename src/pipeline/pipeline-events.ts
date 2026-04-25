@@ -13,7 +13,7 @@ export type PipelineEventType =
     | "llm_call_started"
     | "tool_selected"
     | "query_executing"
-    | "data_received"
+    | "data_extracted"
     | "text_finalizing"
     | "chart_config_generating"
     | "chart_html_generating"
@@ -42,7 +42,7 @@ export interface QueryExecutingPayload {
     attempt: number;
 }
 
-export interface DataReceivedPayload {
+export interface DataExtractedPayload {
     jobId: string;
     rowCount: number;
 }
@@ -74,7 +74,7 @@ export type PipelineEventPayload =
     | LlmCallStartedPayload
     | ToolSelectedPayload
     | QueryExecutingPayload
-    | DataReceivedPayload
+    | DataExtractedPayload
     | TextFinalizingPayload
     | ChartConfigGeneratingPayload
     | ChartHtmlGeneratingPayload
@@ -88,7 +88,7 @@ export type PipelineEvent =
     | { type: "llm_call_started"; payload: LlmCallStartedPayload }
     | { type: "tool_selected"; payload: ToolSelectedPayload }
     | { type: "query_executing"; payload: QueryExecutingPayload }
-    | { type: "data_received"; payload: DataReceivedPayload }
+    | { type: "data_extracted"; payload: DataExtractedPayload }
     | { type: "text_finalizing"; payload: TextFinalizingPayload }
     | { type: "chart_config_generating"; payload: ChartConfigGeneratingPayload }
     | { type: "chart_html_generating"; payload: ChartHtmlGeneratingPayload }

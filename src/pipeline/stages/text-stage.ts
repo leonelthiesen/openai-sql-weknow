@@ -68,7 +68,7 @@ export async function runTextStage(params: TextStageParams): Promise<StageResult
         },
         onDataReceived: (rowCount) => {
             jobStore.emitEvent(jobId, {
-                type: "data_received",
+                type: "data_extracted",
                 payload: { jobId, rowCount },
             });
         },

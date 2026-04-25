@@ -41,6 +41,12 @@ function buildFallbackResult(
     openAiItems: OpenAiItem[],
     extras?: { executionData?: PivotGridResponse; errorResponse?: string | Object }
 ): StageResult {
+    openAiItems.push({
+        type: "function_call",
+        callId,
+        name: "ask_followup",
+        arguments: JSON.stringify({ toolName: "ask_followup", message, userMessageSuggestions: suggestions }),
+    });
     const result = handleAskFollowup(
         { toolName: "ask_followup", message, userMessageSuggestions: suggestions },
         callId
@@ -74,7 +80,7 @@ export async function runTableStage(params: TableStageParams): Promise<StageResu
         },
         onDataReceived: (rowCount) => {
             jobStore.emitEvent(jobId, {
-                type: "data_received",
+                type: "data_extracted",
                 payload: { jobId, rowCount },
             });
         },
@@ -97,11 +103,20 @@ export async function runTableStage(params: TableStageParams): Promise<StageResu
         );
     }
 
+    let userRealData = false;
+    let output = "";
+    if (userRealData) {
+        output = JSON.stringify(executionData);
+    } else {
+        output = "Data extracted successfully. Not displaying the actual data to protect privacy, but you can trust that the query was executed correctly.";
+    }
+
+
     // Add function_call_output for the successful execution
     openAiItems.push({
         type: "function_call_output",
         callId: finalCall.call_id,
-        output: JSON.stringify(executionData),
+        output,
     });
 
     return {

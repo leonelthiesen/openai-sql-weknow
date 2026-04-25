@@ -16,19 +16,24 @@ function isTransientOpenAIError(error: unknown): boolean {
     );
 }
 
-// const MODEL = "gpt-5-mini-2025-08-07";
-const MODEL = "gpt-5.1-codex-mini";
+// const MODEL = "gpt-5.1-codex-mini";
+const MODEL = "gpt-5.4-mini";
 
 const SHARED_OPTIONS = {
     model: MODEL,
-    reasoning: { effort: "low" as const },
+    // reasoning: { effort: "low" as const },
     include: ["reasoning.encrypted_content"] as OpenAI.Responses.ResponseIncludable[],
 };
 
 // Preços por 1M tokens para gpt-5.1-codex-mini (USD)
-const PRICE_INPUT_PER_M = 0.25;
-const PRICE_CACHED_INPUT_PER_M = 0.025;
-const PRICE_OUTPUT_PER_M = 2.00;
+// const PRICE_INPUT_PER_M = 0.25;
+// const PRICE_CACHED_INPUT_PER_M = 0.025;
+// const PRICE_OUTPUT_PER_M = 2.00;
+
+// Preços por 1M tokens para gpt-5.4-mini (USD)
+const PRICE_INPUT_PER_M = 0.75;
+const PRICE_CACHED_INPUT_PER_M = 0.08;
+const PRICE_OUTPUT_PER_M = 4.50;
 
 function logCost(usage: OpenAI.Responses.Response["usage"]): void {
     if (!usage) return;
