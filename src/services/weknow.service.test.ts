@@ -367,9 +367,9 @@ describe("executePivotGridComponent", () => {
     const { executePivotGridComponent } = await import("./weknow.service");
     const result = await executePivotGridComponent(body);
 
-    expect(result.rows[0]!.d1).toBe(1234.56);
-    expect(result.rows[0]!.d2).toBe(true);
-    expect(result.rows[0]!.d3).toBe(new Date("2025-01-15 10:30:00").toISOString());
+    expect(result.rows[0]![0]).toBe(1234.56);
+    expect(result.rows[0]![1]).toBe(true);
+    expect(result.rows[0]![2]).toBe(new Date("2025-01-15 10:30:00").toISOString());
   });
 
   test("preserva valor original quando conversao por dataType falha", async () => {
@@ -419,8 +419,8 @@ describe("executePivotGridComponent", () => {
     const { executePivotGridComponent } = await import("./weknow.service");
     const result = await executePivotGridComponent(body);
 
-    expect(result.rows[0]!.d1).toBe("abc");
-    expect(result.rows[0]!.d2).toBe("talvez");
+    expect(result.rows[0]![0]).toBe("abc");
+    expect(result.rows[0]![1]).toBe("talvez");
   });
 });
 

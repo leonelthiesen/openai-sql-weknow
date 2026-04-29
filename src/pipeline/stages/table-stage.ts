@@ -4,7 +4,9 @@ import type { ExtractDataArgs } from "../../types/tool-args.types";
 import type { OpenAiItem } from "../../services/chat.service";
 import type { OpenAIResponseSchema } from "../../constants";
 import type { PivotGridResponse } from "../../types/pivot-grid-response.types";
+import type { EChartsDatasetResult } from "../../utils/to-echarts-dataset";
 import { executeExtractDataWithRetry } from "./extract-data-shared";
+import { toEChartsDataset } from "../../utils/to-echarts-dataset";
 import { handleAskFollowup } from "../../services/tool-handlers/ask-followup.handler";
 import { jobStore } from "../job-store";
 
@@ -24,8 +26,10 @@ export interface StageResult {
     structuredOutput: OpenAIResponseSchema;
     openAiItems: OpenAiItem[];
     executionData?: PivotGridResponse;
+    datasetResult?: EChartsDatasetResult;
     errorResponse?: string | Object;
-    chartHtml?: string;
+    chartEchartsOption?: Record<string, unknown>;
+    chartVegaLiteSpec?: Record<string, unknown>;
 }
 
 const FALLBACK_SUGGESTIONS = [
@@ -103,6 +107,9 @@ export async function runTableStage(params: TableStageParams): Promise<StageResu
         );
     }
 
+    // Transform data into generic ECharts dataset format
+    const datasetResult = toEChartsDataset(executionData.cols, executionData.rows);
+
     let userRealData = false;
     let output = "";
     if (userRealData) {
@@ -129,6 +136,7 @@ export async function runTableStage(params: TableStageParams): Promise<StageResu
         },
         openAiItems,
         executionData,
+        datasetResult,
         errorResponse,
     };
 }

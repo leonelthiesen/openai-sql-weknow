@@ -7,9 +7,7 @@ export interface RawPivotGridRow {
   [key: RowKey]: PivotGridCellRawValue;
 }
 
-export interface PivotGridRow {
-  [key: RowKey]: PivotGridCellValue;
-}
+export type PivotGridRow = PivotGridCellValue[];
 
 export interface PivotGridColumnHeader {
   caption: string;

@@ -43,6 +43,7 @@ export function buildChartSchemaDescription(cols: PivotGridColumn[]): string {
     const lines: string[] = ["Fields:"];
 
     for (const col of cols) {
+        if (!col.completeName || col.visible === false) continue;
         const name = col.completeName;
         const label = col.header?.caption ?? name;
         const type = dataTypeLabel(col.dataType);

@@ -1,6 +1,7 @@
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import { logger } from "../../utils/logger";
 import { extractResponseText } from "../../utils/extract-response-text";
+import { stripMarkdownFences } from "../../utils/strip-markdown-fences";
 import { validateChartHtml } from "../../utils/validate-chart-html";
 import type { OpenAiItem } from "../chat.service";
 import { callOpenAIForMessage } from "../openai-call";
@@ -123,9 +124,6 @@ with window.CHART_DATA injected by the parent before the script runs.
 Config: ${JSON.stringify(config)}`;
 }
 
-function stripMarkdownFences(text: string): string {
-    return text.replace(/^```(?:html)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-}
 
 export async function handleGenerateChartHtml(params: {
     config: ChartConfig;

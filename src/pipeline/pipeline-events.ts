@@ -1,6 +1,7 @@
 import type { OpenAIResponseSchema } from "../constants";
 import type { OpenAiItem } from "../services/chat.service";
 import type { PivotGridResponse } from "../types/pivot-grid-response.types";
+import type { EChartsDatasetResult } from "../utils/to-echarts-dataset";
 
 // ── Job status ───────────────────────────────────────────────────────────────
 
@@ -16,7 +17,7 @@ export type PipelineEventType =
     | "data_extracted"
     | "text_finalizing"
     | "chart_config_generating"
-    | "chart_html_generating"
+    | "chart_option_generating"
     | "completed"
     | "failed";
 
@@ -55,7 +56,7 @@ export interface ChartConfigGeneratingPayload {
     jobId: string;
 }
 
-export interface ChartHtmlGeneratingPayload {
+export interface ChartOptionGeneratingPayload {
     jobId: string;
 }
 
@@ -77,7 +78,7 @@ export type PipelineEventPayload =
     | DataExtractedPayload
     | TextFinalizingPayload
     | ChartConfigGeneratingPayload
-    | ChartHtmlGeneratingPayload
+    | ChartOptionGeneratingPayload
     | CompletedPayload
     | FailedPayload;
 
@@ -91,7 +92,7 @@ export type PipelineEvent =
     | { type: "data_extracted"; payload: DataExtractedPayload }
     | { type: "text_finalizing"; payload: TextFinalizingPayload }
     | { type: "chart_config_generating"; payload: ChartConfigGeneratingPayload }
-    | { type: "chart_html_generating"; payload: ChartHtmlGeneratingPayload }
+    | { type: "chart_option_generating"; payload: ChartOptionGeneratingPayload }
     | { type: "completed"; payload: CompletedPayload }
     | { type: "failed"; payload: FailedPayload };
 
@@ -101,8 +102,10 @@ export interface JobResult {
     structuredOutput: OpenAIResponseSchema;
     openAiItems: OpenAiItem[];
     executionData?: PivotGridResponse;
+    datasetResult?: EChartsDatasetResult;
     errorResponse?: string | Object;
-    chartHtml?: string;
+    chartEchartsOption?: Record<string, unknown>;
+    chartVegaLiteSpec?: Record<string, unknown>;
     userMessageId: string;
     assistantMessageId: string;
 }

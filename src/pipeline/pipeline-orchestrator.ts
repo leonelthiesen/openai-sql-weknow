@@ -15,6 +15,8 @@ import { runChartStage } from "./stages/chart-stage";
 import { runFollowupStage } from "./stages/followup-stage";
 import { handleAskFollowup } from "../services/tool-handlers/ask-followup.handler";
 import type { StageResult } from "./stages/table-stage";
+import { pipelineStorage, type PipelineContext } from "./pipeline-context";
+import { writePipelineLog } from "./pipeline-log-writer";
 
 const PARSE_FALLBACK_SUGGESTIONS = [
     "Reformule a pergunta com mais clareza",
@@ -23,6 +25,18 @@ const PARSE_FALLBACK_SUGGESTIONS = [
 ];
 
 export async function runPipeline(job: Job): Promise<void> {
+    const ctx: PipelineContext = {
+        jobId: job.id,
+        conversationId: job.conversationId,
+        llmCalls: [],
+    };
+
+    await pipelineStorage.run(ctx, () => _runPipelineInner(job));
+
+    await writePipelineLog(ctx, jobStore.getJob(job.id) ?? job);
+}
+
+async function _runPipelineInner(job: Job): Promise<void> {
     const { id: jobId, conversationId, userId, metadataId, input, options } = job;
     const openAiItems: OpenAiItem[] = [];
 
@@ -165,8 +179,10 @@ export async function runPipeline(job: Job): Promise<void> {
             role: "assistant",
             parsedContent: stageResult.structuredOutput,
             executionData: stageResult.executionData,
+            datasetResult: stageResult.datasetResult,
             errorResponse: stageResult.errorResponse,
-            chartHtml: stageResult.chartHtml,
+            chartEchartsOption: stageResult.chartEchartsOption,
+            chartVegaLiteSpec: stageResult.chartVegaLiteSpec,
             openAiItems: stageResult.openAiItems,
         });
 
@@ -178,9 +194,10 @@ export async function runPipeline(job: Job): Promise<void> {
                 result: {
                     structuredOutput: stageResult.structuredOutput,
                     openAiItems: stageResult.openAiItems,
-                    executionData: stageResult.executionData,
+                    datasetResult: stageResult.datasetResult,
                     errorResponse: stageResult.errorResponse,
-                    chartHtml: stageResult.chartHtml,
+                    chartEchartsOption: stageResult.chartEchartsOption,
+                    chartVegaLiteSpec: stageResult.chartVegaLiteSpec,
                     userMessageId: job.userMessageId!,
                     assistantMessageId: assistantMessage.id,
                 },

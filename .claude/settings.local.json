@@ -9,7 +9,9 @@
       "Bash(npx vitest:*)",
       "Bash(find /c/ProjetosGit/openai-sql-weknow -name *.json -path */data/*)",
       "Bash(xargs ls:*)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(git stash *)"
     ]
   }
 }

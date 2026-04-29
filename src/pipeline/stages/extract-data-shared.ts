@@ -60,6 +60,33 @@ export async function executeExtractDataWithRetry(
         const result = await handleExtractData(currentArgs, metadataId);
 
         if (result.success) {
+            // Keep only cols that have a completeName
+            const keptColEntries = result.data.cols
+                .map((col, idx) => ({ col, idx }))
+                .filter(({ col }) => !!col.completeName);
+
+            // Original indices of section-15 cols (among kept cols)
+            const section15OrigIndices = new Set(
+                keptColEntries
+                    .filter(({ col }) => col.section === 15)
+                    .map(({ idx }) => idx)
+            );
+
+            // Filter rows: drop rows with null/empty in any section-15 col, then remap to array
+            const filteredRows = (result.data.rows ?? [])
+                .filter(row => {
+                    let hasAllValuesEmpty = [...section15OrigIndices].every(origIdx => {
+                        const val = row[origIdx];
+                        return val === null || val === undefined || val === "";
+                    });
+
+                    return !hasAllValuesEmpty;
+                })
+                .map(row => keptColEntries.map(({ idx: origIdx }) => row[origIdx] ?? null));
+
+            result.data.cols = keptColEntries.map(({ col }) => col);
+            result.data.rows = filteredRows;
+
             onDataReceived?.(result.data.rows ? result.data.rows.length : 0);
             return {
                 executionData: result.data,

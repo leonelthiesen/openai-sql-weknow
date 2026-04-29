@@ -206,19 +206,12 @@ function normalizePivotGridRow(
   row: RawPivotGridRow,
   cols: RawPivotGridResponse["cols"],
 ): PivotGridResponse["rows"][number] {
-  const normalized: PivotGridResponse["rows"][number] = {};
-
-  for (let idx = 0; idx < cols.length; idx++) {
+  return cols.map((col, idx) => {
     const key = `d${idx + 1}` as const;
     const rawValue = row[key];
-    if (rawValue === undefined) {
-      continue;
-    }
-
-    normalized[key] = normalizeCellValue(rawValue, cols[idx]!.dataType);
-  }
-
-  return normalized;
+    if (rawValue === undefined) return null;
+    return normalizeCellValue(rawValue, col.dataType);
+  });
 }
 
 function normalizeCellValue(value: string, dataType: number): PivotGridCellValue {

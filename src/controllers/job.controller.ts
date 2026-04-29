@@ -90,7 +90,7 @@ export const getJobStatus = (req: Request<{ jobId: string }>, res: Response) => 
     if (job.status === "COMPLETED" && job.result) {
         response.result = {
             structuredOutput: job.result.structuredOutput,
-            executionData: job.result.executionData,
+            datasetResult: job.result.datasetResult,
             errorResponse: job.result.errorResponse,
             userMessageId: job.result.userMessageId,
             assistantMessageId: job.result.assistantMessageId,
@@ -102,7 +102,7 @@ export const getJobStatus = (req: Request<{ jobId: string }>, res: Response) => 
         if (job.result) {
             response.result = {
                 structuredOutput: job.result.structuredOutput,
-                executionData: job.result.executionData,
+                datasetResult: job.result.datasetResult,
                 errorResponse: job.result.errorResponse,
                 userMessageId: job.result.userMessageId,
                 assistantMessageId: job.result.assistantMessageId,

@@ -3,6 +3,7 @@ import type { ResponseOutputItem } from "openai/resources/responses/responses";
 import { MetadataField, MODEL_INSTRUCTIONS, OpenAIResponseSchema } from "../constants";
 import { sql } from "../db";
 import { PivotGridResponse } from "../types/pivot-grid-response.types";
+import type { EChartsDatasetResult } from "../utils/to-echarts-dataset";
 
 export interface ExecutionData {
   dimensions: string[];
@@ -31,8 +32,10 @@ export interface AppMessage {
   content?: string;
   parsedContent?: OpenAIResponseSchema;
   executionData?: PivotGridResponse;
+  datasetResult?: EChartsDatasetResult;
   errorResponse?: string | object;
-  chartHtml?: string;
+  chartEchartsOption?: Record<string, unknown>;
+  chartVegaLiteSpec?: Record<string, unknown>;
   openAiItems: OpenAiItem[];
   createdAt: Date;
 }
@@ -83,8 +86,10 @@ interface AppMessageRow {
   content: string | null;
   parsed_content: OpenAIResponseSchema | string | null;
   execution_data: PivotGridResponse | string | null;
+  dataset_result: EChartsDatasetResult | string | null;
   error_response: string | object | null;
   chart_html: string | null;
+  chart_vega_lite: string | null;
   open_ai_items: OpenAiItem[] | string | null;
   created_at: Date;
 }
@@ -178,8 +183,10 @@ function mapAppMessage(row: AppMessageRow): AppMessage {
     content: row.content ?? undefined,
     parsedContent: parseJsonObject<OpenAIResponseSchema>(row.parsed_content),
     executionData: parseJsonObject<PivotGridResponse>(row.execution_data),
+    datasetResult: parseJsonObject<EChartsDatasetResult>(row.dataset_result),
     errorResponse: parseErrorResponse(row.error_response),
-    chartHtml: row.chart_html ?? undefined,
+    chartEchartsOption: parseJsonObject<Record<string, unknown>>(row.chart_html),
+    chartVegaLiteSpec: parseJsonObject<Record<string, unknown>>(row.chart_vega_lite),
     openAiItems: parseOpenAiItems(row.open_ai_items),
     createdAt: new Date(row.created_at),
   };
@@ -358,8 +365,10 @@ export async function addAppMessage(
       content,
       parsed_content,
       execution_data,
+      dataset_result,
       error_response,
       chart_html,
+      chart_vega_lite,
       open_ai_items,
       created_at
     )
@@ -371,8 +380,10 @@ export async function addAppMessage(
       ${appMessage.content ?? null},
       ${appMessage.parsedContent === undefined ? null : JSON.stringify(appMessage.parsedContent)}::jsonb,
       ${appMessage.executionData === undefined ? null : JSON.stringify(appMessage.executionData)}::jsonb,
+      ${appMessage.datasetResult === undefined ? null : JSON.stringify(appMessage.datasetResult)}::jsonb,
       ${appMessage.errorResponse === undefined ? null : JSON.stringify(appMessage.errorResponse)}::jsonb,
-      ${appMessage.chartHtml ?? null},
+      ${appMessage.chartEchartsOption === undefined ? null : JSON.stringify(appMessage.chartEchartsOption)},
+      ${appMessage.chartVegaLiteSpec === undefined ? null : JSON.stringify(appMessage.chartVegaLiteSpec)},
       ${JSON.stringify(appMessage.openAiItems)}::jsonb,
       ${appMessage.createdAt}
     )
@@ -399,7 +410,7 @@ export async function getMessagesByConversationId(
   }
 
   const rows = await sql<AppMessageRow[]>`
-    select id, role, user_id, content, parsed_content, execution_data, error_response, chart_html, open_ai_items, created_at
+    select id, role, user_id, content, parsed_content, execution_data, dataset_result, error_response, chart_html, chart_vega_lite, open_ai_items, created_at
     from app_messages
     where conversation_id = ${conversationId}
     order by created_at asc
@@ -584,7 +595,7 @@ export async function searchConversations(
   }
 
   const messageRows = await sql<Array<AppMessageRow & { conversation_id: string }>>`
-    select id, conversation_id, role, user_id, content, parsed_content, execution_data,  error_response, open_ai_items, created_at
+    select id, conversation_id, role, user_id, content, parsed_content, execution_data, dataset_result, error_response, open_ai_items, created_at
     from app_messages
     where conversation_id in ${sql(conversationIds)}
     order by created_at asc
@@ -628,7 +639,7 @@ export async function getConversationsByFolder(
 
   const firstMessageRows = await sql<Array<AppMessageRow & { conversation_id: string }>>`
     select distinct on (conversation_id)
-      id, conversation_id, role, user_id, content, parsed_content, execution_data, error_response, open_ai_items, created_at
+      id, conversation_id, role, user_id, content, parsed_content, execution_data, dataset_result, error_response, open_ai_items, created_at
     from app_messages
     where conversation_id in ${sql(conversationIds)}
       and role = 'user'

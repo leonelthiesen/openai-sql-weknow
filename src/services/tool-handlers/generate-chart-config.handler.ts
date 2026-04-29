@@ -12,8 +12,8 @@ export interface GenerateChartConfigResult {
     failureReason?: string;
 }
 
-function buildChartConfigPrompt(schema: string): string {
-    return [
+function buildChartConfigPrompt(schema: string, retryHint?: string): string {
+    const lines = [
         "You are a data visualization specialist.",
         "Given a SQL view schema and a user request, return ONLY a JSON config for a chart — no explanation, no markdown, no code.",
         "",
@@ -26,8 +26,19 @@ function buildChartConfigPrompt(schema: string): string {
         "- The SQL query will handle all grouping and aggregation.",
         "- Assume the data is already in its final aggregated form.",
         "",
-        `Schema: ${schema}`
-    ].join("\n");
+        "## Dimension roles",
+        "- Fields with role 'category dimension' should map to the x-axis (or theta for pie/donut).",
+        "- Fields with role 'series dimension' should map to the color encoding (they will be pivoted into separate series automatically).",
+        "- Fields with role 'measure (aggregated)' should map to y (or theta value for pie/donut).",
+    ];
+    lines.push(
+        "",
+        `Schema: ${schema}`,
+    );
+    if (retryHint) {
+        lines.push("", retryHint);
+    }
+    return lines.join("\n");
 }
 
 export async function handleGenerateChartConfig(params: {
@@ -35,8 +46,9 @@ export async function handleGenerateChartConfig(params: {
     baseInput: ResponseInputItem[];
     lastResponseOutput: unknown[];
     extractDataCallOutput: OpenAiItem;
+    retryHint?: string;
 }): Promise<GenerateChartConfigResult> {
-    const { schema, baseInput, lastResponseOutput, extractDataCallOutput } = params;
+    const { schema, baseInput, lastResponseOutput, extractDataCallOutput, retryHint } = params;
     const startTime = Date.now();
     const openAiItems: OpenAiItem[] = [];
 
@@ -48,7 +60,7 @@ export async function handleGenerateChartConfig(params: {
         };
     }
 
-    const developerMessage = buildChartConfigPrompt(schema);
+    const developerMessage = buildChartConfigPrompt(schema, retryHint);
     openAiItems.push({
         type: "message",
         role: "developer",

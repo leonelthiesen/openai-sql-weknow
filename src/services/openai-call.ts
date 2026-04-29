@@ -3,6 +3,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { MODEL_INSTRUCTIONS } from "../constants";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import type { z } from "zod/v4";
+import { pipelineStorage } from "../pipeline/pipeline-context";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -67,6 +68,11 @@ export async function callOpenAI(
     tools: OpenAI.Responses.Tool[],
     toolChoice: "required" | "auto" = "auto"
 ): Promise<OpenAICallResult> {
+    const ctx = pipelineStorage.getStore();
+    const callIndex = ctx ? ctx.llmCalls.length : -1;
+    const startedAt = new Date().toISOString();
+    const startMs = Date.now();
+
     let lastError: unknown;
     for (let attempt = 1; attempt <= 3; attempt++) {
         try {
@@ -79,12 +85,34 @@ export async function callOpenAI(
             });
             const functionCalls = extractFunctionCalls(response);
             logCost(response.usage);
+            if (ctx) {
+                ctx.llmCalls.push({
+                    index: callIndex,
+                    callType: "callOpenAI",
+                    startedAt,
+                    completedAt: new Date().toISOString(),
+                    durationMs: Date.now() - startMs,
+                    input,
+                    response,
+                });
+            }
             return { response, functionCalls };
         } catch (error) {
             lastError = error;
             if (attempt < 3 && isTransientOpenAIError(error)) {
                 await sleep(1000);
                 continue;
+            }
+            if (ctx) {
+                ctx.llmCalls.push({
+                    index: callIndex,
+                    callType: "callOpenAI",
+                    startedAt,
+                    completedAt: new Date().toISOString(),
+                    durationMs: Date.now() - startMs,
+                    input,
+                    error: error instanceof Error ? error.message : String(error),
+                });
             }
             throw error;
         }
@@ -95,6 +123,11 @@ export async function callOpenAI(
 export async function callOpenAIForMessage(
     input: ResponseInputItem[]
 ): Promise<OpenAI.Responses.Response> {
+    const ctx = pipelineStorage.getStore();
+    const callIndex = ctx ? ctx.llmCalls.length : -1;
+    const startedAt = new Date().toISOString();
+    const startMs = Date.now();
+
     let lastError: unknown;
     for (let attempt = 1; attempt <= 3; attempt++) {
         try {
@@ -104,12 +137,34 @@ export async function callOpenAIForMessage(
                 input,
             });
             logCost(response.usage);
+            if (ctx) {
+                ctx.llmCalls.push({
+                    index: callIndex,
+                    callType: "callOpenAIForMessage",
+                    startedAt,
+                    completedAt: new Date().toISOString(),
+                    durationMs: Date.now() - startMs,
+                    input,
+                    response,
+                });
+            }
             return response;
         } catch (error) {
             lastError = error;
             if (attempt < 3 && isTransientOpenAIError(error)) {
                 await sleep(1000);
                 continue;
+            }
+            if (ctx) {
+                ctx.llmCalls.push({
+                    index: callIndex,
+                    callType: "callOpenAIForMessage",
+                    startedAt,
+                    completedAt: new Date().toISOString(),
+                    durationMs: Date.now() - startMs,
+                    input,
+                    error: error instanceof Error ? error.message : String(error),
+                });
             }
             throw error;
         }
@@ -122,6 +177,11 @@ export async function callOpenAIForStructuredMessage<T extends z.ZodTypeAny>(
     schema: T,
     schemaName: string
 ): Promise<{ response: OpenAI.Responses.Response; parsed: z.infer<T> }> {
+    const ctx = pipelineStorage.getStore();
+    const callIndex = ctx ? ctx.llmCalls.length : -1;
+    const startedAt = new Date().toISOString();
+    const startMs = Date.now();
+
     let lastError: unknown;
     for (let attempt = 1; attempt <= 3; attempt++) {
         try {
@@ -136,12 +196,34 @@ export async function callOpenAIForStructuredMessage<T extends z.ZodTypeAny>(
             if (parsed === null) {
                 throw new Error("LLM não retornou conteúdo estruturado (recusa ou saída vazia)");
             }
+            if (ctx) {
+                ctx.llmCalls.push({
+                    index: callIndex,
+                    callType: "callOpenAIForStructuredMessage",
+                    startedAt,
+                    completedAt: new Date().toISOString(),
+                    durationMs: Date.now() - startMs,
+                    input,
+                    response,
+                });
+            }
             return { response, parsed };
         } catch (error) {
             lastError = error;
             if (attempt < 3 && isTransientOpenAIError(error)) {
                 await sleep(1000);
                 continue;
+            }
+            if (ctx) {
+                ctx.llmCalls.push({
+                    index: callIndex,
+                    callType: "callOpenAIForStructuredMessage",
+                    startedAt,
+                    completedAt: new Date().toISOString(),
+                    durationMs: Date.now() - startMs,
+                    input,
+                    error: error instanceof Error ? error.message : String(error),
+                });
             }
             throw error;
         }

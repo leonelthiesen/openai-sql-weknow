@@ -4,6 +4,7 @@ import type { ExtractDataArgs } from "../../types/tool-args.types";
 import type { OpenAiItem } from "../../services/chat.service";
 import type { StageResult } from "./table-stage";
 import { executeExtractDataWithRetry } from "./extract-data-shared";
+import { toEChartsDataset } from "../../utils/to-echarts-dataset";
 import { handleAskFollowup } from "../../services/tool-handlers/ask-followup.handler";
 import { handleFinalizeTextMessage } from "../../services/tool-handlers/finalize-text-message.handler";
 import { jobStore } from "../job-store";
@@ -91,11 +92,14 @@ export async function runTextStage(params: TextStageParams): Promise<StageResult
         );
     }
 
+    // Transform data into generic ECharts dataset format
+    const datasetResult = toEChartsDataset(executionData.cols, executionData.rows);
+
     // ── Build data output ────────────────────────────────────────────────────
     const extractDataFunctionCallOutput: OpenAiItem = {
         type: "function_call_output",
         callId: finalCall.call_id,
-        output: JSON.stringify(executionData),
+        output: JSON.stringify(datasetResult.dataset),
     };
     openAiItems.push(extractDataFunctionCallOutput);
 
@@ -155,6 +159,7 @@ export async function runTextStage(params: TextStageParams): Promise<StageResult
         },
         openAiItems,
         executionData,
+        datasetResult,
         errorResponse,
     };
 }
