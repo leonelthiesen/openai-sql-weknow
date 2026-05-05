@@ -20,6 +20,7 @@ router.delete("/conversations/:id/share/:sharedWithUserId", chatController.revok
 // Job pipeline endpoints
 router.get("/jobs/:jobId/events", jobController.getJobEvents);
 router.get("/jobs/:jobId", jobController.getJobStatus);
+router.post("/jobs/:jobId/approve-field-values", jobController.approveFieldValues);
 
 router.get("/folders", chatController.getAllFolders);
 router.post("/folders", chatController.createFolder);

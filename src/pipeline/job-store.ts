@@ -9,6 +9,15 @@ import type {
 } from "./pipeline-events";
 import { logger } from "../utils/logger";
 
+// ── Approval timeout error ───────────────────────────────────────────────────
+
+export class ApprovalTimeoutError extends Error {
+    constructor(public readonly jobId: string) {
+        super(`Approval timeout for job ${jobId}`);
+        this.name = "ApprovalTimeoutError";
+    }
+}
+
 // ── Job definition ───────────────────────────────────────────────────────────
 
 export interface Job {
@@ -53,6 +62,7 @@ const JOB_TTL_MS = 30 * 60 * 1000; // 30 minutes after completion
 class JobStore {
     private jobs = new Map<string, Job>();
     private emitters = new Map<string, JobEmitter>();
+    private pendingApprovals = new Map<string, (approved: boolean) => void>();
     private cleanupTimer: ReturnType<typeof setInterval>;
 
     constructor() {
@@ -122,6 +132,28 @@ class JobStore {
         emitter?.emitPipelineEvent(event);
     }
 
+    waitForApproval(jobId: string, timeoutMs = 5 * 60 * 1000): Promise<boolean> {
+        return new Promise<boolean>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this.pendingApprovals.delete(jobId);
+                reject(new ApprovalTimeoutError(jobId));
+            }, timeoutMs);
+
+            this.pendingApprovals.set(jobId, (approved: boolean) => {
+                clearTimeout(timer);
+                this.pendingApprovals.delete(jobId);
+                resolve(approved);
+            });
+        });
+    }
+
+    resolveApproval(jobId: string, approved: boolean): boolean {
+        const resolver = this.pendingApprovals.get(jobId);
+        if (!resolver) return false;
+        resolver(approved);
+        return true;
+    }
+
     subscribeToEvents(
         jobId: string,
         listener: (event: PipelineEvent) => void
@@ -147,6 +179,7 @@ class JobStore {
                 const emitter = this.emitters.get(jobId);
                 emitter?.removeAllListeners();
                 this.emitters.delete(jobId);
+                this.pendingApprovals.delete(jobId);
                 cleaned++;
             }
         }

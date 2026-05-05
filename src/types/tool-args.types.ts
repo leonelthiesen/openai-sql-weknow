@@ -31,7 +31,14 @@ export interface ExtractTextValuesArgs {
     values: TextValueItem[];
 }
 
+export interface RequestFieldValuesArgs {
+    toolName: "request_field_values";
+    fieldCompleteName: string;
+    reason: string;
+}
+
 export type ParsedToolArgs =
     | ExtractDataArgs
     | AskFollowupArgs
-    | ExtractTextValuesArgs;
+    | ExtractTextValuesArgs
+    | RequestFieldValuesArgs;

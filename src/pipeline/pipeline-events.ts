@@ -18,6 +18,8 @@ export type PipelineEventType =
     | "text_finalizing"
     | "chart_config_generating"
     | "chart_option_generating"
+    | "field_values_requested"
+    | "field_values_fetching"
     | "completed"
     | "failed";
 
@@ -70,6 +72,17 @@ export interface FailedPayload {
     error: string;
 }
 
+export interface FieldValuesRequestedPayload {
+    jobId: string;
+    fieldCompleteName: string;
+    reason: string;
+}
+
+export interface FieldValuesFetchingPayload {
+    jobId: string;
+    fieldCompleteName: string;
+}
+
 export type PipelineEventPayload =
     | JobCreatedPayload
     | LlmCallStartedPayload
@@ -79,6 +92,8 @@ export type PipelineEventPayload =
     | TextFinalizingPayload
     | ChartConfigGeneratingPayload
     | ChartOptionGeneratingPayload
+    | FieldValuesRequestedPayload
+    | FieldValuesFetchingPayload
     | CompletedPayload
     | FailedPayload;
 
@@ -93,6 +108,8 @@ export type PipelineEvent =
     | { type: "text_finalizing"; payload: TextFinalizingPayload }
     | { type: "chart_config_generating"; payload: ChartConfigGeneratingPayload }
     | { type: "chart_option_generating"; payload: ChartOptionGeneratingPayload }
+    | { type: "field_values_requested"; payload: FieldValuesRequestedPayload }
+    | { type: "field_values_fetching"; payload: FieldValuesFetchingPayload }
     | { type: "completed"; payload: CompletedPayload }
     | { type: "failed"; payload: FailedPayload };
 

@@ -113,6 +113,46 @@ export const getJobStatus = (req: Request<{ jobId: string }>, res: Response) => 
     return res.json(response);
 };
 
+// ── Approve field values lookup ──────────────────────────────────────────────
+
+export const approveFieldValues = (
+    req: Request<{ jobId: string }, object, { approved: boolean }>,
+    res: Response
+): void => {
+    const authenticatedUserId = req.authenticatedUserId;
+    if (!authenticatedUserId) {
+        res.status(401).json({ message: "Usuário não autenticado." });
+        return;
+    }
+
+    const { jobId } = req.params;
+    const job = jobStore.getJob(jobId);
+
+    if (!job) {
+        res.status(404).json({ message: "Job não encontrado." });
+        return;
+    }
+
+    if (job.userId !== authenticatedUserId) {
+        res.status(403).json({ message: "Você não possui permissão para acessar este job." });
+        return;
+    }
+
+    const { approved } = req.body;
+    if (typeof approved !== "boolean") {
+        res.status(400).json({ message: "'approved' deve ser um valor booleano." });
+        return;
+    }
+
+    const resolved = jobStore.resolveApproval(jobId, approved);
+    if (!resolved) {
+        res.status(409).json({ message: "Nenhuma aprovação pendente para este job." });
+        return;
+    }
+
+    res.status(200).json({ message: "Aprovação registrada." });
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function writeSSE(res: Response, event: PipelineEvent): void {

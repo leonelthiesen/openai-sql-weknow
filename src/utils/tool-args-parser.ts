@@ -3,6 +3,7 @@ import type {
     ExtractDataArgs,
     AskFollowupArgs,
     ExtractTextValuesArgs,
+    RequestFieldValuesArgs,
 } from "../types/tool-args.types";
 
 interface ParseToolArgsOptions {
@@ -49,6 +50,8 @@ export function parseToolArgs(name: string, rawArguments: string, options: Parse
             return parseAskFollowupArgs(parsed);
         case "extract_text_values":
             return parseExtractTextValuesArgs(parsed);
+        case "request_field_values":
+            return parseRequestFieldValuesArgs(parsed);
         default:
             throw new ToolValidationError(name, `Unknown tool: ${name}`);
     }
@@ -316,5 +319,19 @@ function parseExtractTextValuesArgs(parsed: any): ExtractTextValuesArgs {
     return {
         toolName: "extract_text_values",
         values: parsed.values,
+    };
+}
+
+function parseRequestFieldValuesArgs(parsed: any): RequestFieldValuesArgs {
+    if (!parsed.fieldCompleteName || typeof parsed.fieldCompleteName !== "string") {
+        throw new ToolValidationError("request_field_values", "Missing or invalid 'fieldCompleteName'");
+    }
+    if (!parsed.reason || typeof parsed.reason !== "string") {
+        throw new ToolValidationError("request_field_values", "Missing or invalid 'reason'");
+    }
+    return {
+        toolName: "request_field_values",
+        fieldCompleteName: parsed.fieldCompleteName,
+        reason: parsed.reason,
     };
 }
