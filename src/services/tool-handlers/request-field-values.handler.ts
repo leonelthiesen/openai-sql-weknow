@@ -1,6 +1,8 @@
 import { executePivotGridComponent, getAccessToken } from "../weknow.service";
 import { TComponentType } from "../../models/TComponentType";
 import { TGridBaseType } from "../../models/TGridBaseType";
+import { TMeasureFunction } from "../../models/TMeasureFunction";
+import { TFieldType } from "../../models/TFieldType";
 
 const MAX_FIELD_VALUES = 100;
 
@@ -32,9 +34,22 @@ export async function fetchFieldValues(
             dataSource: { metadataId },
             version: "5.2.1",
             type: TComponentType.ctGrid,
+            calculatedFields: [{
+                completeName: "recordCount",
+                dataType: TFieldType.ftInteger,
+                formula: "count(*)",
+                hasAggregateFunction: true,
+                hasAnalyticFunction: false,
+                title: "Contagem de registros",
+            }],
             gridView: {
                 gridBaseType: TGridBaseType.gbtMultiDimension,
                 rows: [{ completeName: fieldCompleteName }],
+                measures: [{
+                    completeName: "recordCount",
+                    title: "Contagem de registros",
+                    measureFunction: TMeasureFunction.fnNone,
+                }],
             },
         },
         accessToken,

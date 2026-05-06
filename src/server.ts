@@ -64,6 +64,7 @@ app.use("/api/chat", chatRoutes);
 // Compatibility aliases for frontend clients using /api/jobs instead of /api/chat/jobs
 app.get("/api/jobs/:jobId/events", authenticateApiUser, jobController.getJobEvents);
 app.get("/api/jobs/:jobId", authenticateApiUser, jobController.getJobStatus);
+app.post("/api/jobs/:jobId/approve-field-values", authenticateApiUser, jobController.approveFieldValues);
 
 async function startServer(): Promise<void> {
   await checkDatabaseConnection();

@@ -26,6 +26,7 @@ export interface OpenAiItem {
 }
 
 export interface AppMessage {
+  conversationId: string;
   id: string;
   role: "user" | "assistant";
   userId: string;
@@ -80,6 +81,7 @@ interface ConversationRow {
 }
 
 interface AppMessageRow {
+  conversation_id: string;
   id: string;
   role: "user" | "assistant";
   user_id: string;
@@ -177,6 +179,7 @@ function parseErrorResponse(value: string | object | null): string | object | un
 
 function mapAppMessage(row: AppMessageRow): AppMessage {
   return {
+    conversationId: row.conversation_id,
     id: row.id,
     role: row.role,
     userId: row.user_id,
@@ -352,7 +355,6 @@ export async function createConversation(
 }
 
 export async function addAppMessage(
-  conversationId: string,
   authorUserId: string,
   appMessage: AppMessage
 ): Promise<void> {
@@ -374,7 +376,7 @@ export async function addAppMessage(
     )
     values (
       ${appMessage.id},
-      ${conversationId},
+      ${appMessage.conversationId},
       ${appMessage.role},
       ${authorUserId},
       ${appMessage.content ?? null},
@@ -392,7 +394,7 @@ export async function addAppMessage(
   await sql`
     update conversations
     set updated_at = now()
-    where id = ${conversationId}
+    where id = ${appMessage.conversationId}
   `;
 }
 
@@ -420,11 +422,10 @@ export async function getMessagesByConversationId(
 }
 
 export async function createAppMessage(
-  conversationId: string,
   currentUserId: string,
   appMessage: Omit<AppMessage, "id" | "createdAt" | "userId">
 ): Promise<AppMessage> {
-  await assertConversationOwner(conversationId, currentUserId);
+  await assertConversationOwner(appMessage.conversationId, currentUserId);
 
   const newMessage: AppMessage = {
     ...appMessage,
@@ -433,7 +434,7 @@ export async function createAppMessage(
     createdAt: new Date(),
   };
 
-  await addAppMessage(conversationId, currentUserId, newMessage);
+  await addAppMessage(currentUserId, newMessage);
   return newMessage;
 }
 

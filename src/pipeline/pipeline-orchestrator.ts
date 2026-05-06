@@ -21,6 +21,7 @@ import { pipelineStorage, type PipelineContext } from "./pipeline-context";
 import { writePipelineLog } from "./pipeline-log-writer";
 import { toInputItems } from "../services/llm-retry";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
+import { ExtractDataArgs } from "../types/tool-args.types";
 
 const PARSE_FALLBACK_SUGGESTIONS = [
     "Reformule a pergunta com mais clareza",
@@ -178,7 +179,14 @@ async function _runPipelineInner(job: Job): Promise<void> {
                             type: "field_values_fetching",
                             payload: { jobId, fieldCompleteName: primaryArgs.fieldCompleteName },
                         });
-                        fieldResult = await fetchFieldValues(primaryArgs.fieldCompleteName, metadataId);
+                        try {
+                            fieldResult = await fetchFieldValues(primaryArgs.fieldCompleteName, metadataId);
+                        } catch (fetchError) {
+                            logger.error("pipeline", `fetchFieldValues failed for ${primaryArgs.fieldCompleteName}`, {
+                                error: fetchError instanceof Error ? fetchError.message : String(fetchError),
+                            });
+                            fieldResult = buildDeniedResult(primaryArgs.fieldCompleteName);
+                        }
                     } else {
                         fieldResult = buildDeniedResult(primaryArgs.fieldCompleteName);
                     }
@@ -209,10 +217,9 @@ async function _runPipelineInner(job: Job): Promise<void> {
                 },
             });
 
-            const stageParams = {
+            const stageParams: any = {
                 jobId,
                 parsedCall: parsed.call,
-                parsedArgs: primaryArgs,
                 responseOutput: parsed.responseOutput as unknown[],
                 baseInput: currentInput,
                 tools: primaryTools,
@@ -228,6 +235,7 @@ async function _runPipelineInner(job: Job): Promise<void> {
                     openAiItems,
                 });
             } else if (primaryArgs.toolName === "extract_data") {
+                stageParams.parsedArgs = primaryArgs as ExtractDataArgs;
                 switch (primaryArgs.renderType) {
                     case "TABLE":
                         stageResult = await runTableStage(stageParams);
@@ -236,7 +244,7 @@ async function _runPipelineInner(job: Job): Promise<void> {
                         stageResult = await runTextStage(stageParams);
                         break;
                     case "CHART":
-                        stageResult = await runChartStage({ ...stageParams });
+                        stageResult = await runChartStage(stageParams);
                         break;
                     default:
                         stageResult = await runTableStage(stageParams);
@@ -248,7 +256,8 @@ async function _runPipelineInner(job: Job): Promise<void> {
         }
 
         // ── Persist assistant message ────────────────────────────────────────
-        const assistantMessage = await chatService.createAppMessage(conversationId, userId, {
+        const assistantMessage = await chatService.createAppMessage(userId, {
+            conversationId,
             role: "assistant",
             parsedContent: stageResult!.structuredOutput,
             executionData: stageResult!.executionData,
@@ -299,7 +308,8 @@ async function _runPipelineInner(job: Job): Promise<void> {
             );
             openAiItems.push(...fallback.openAiItems);
 
-            const assistantMessage = await chatService.createAppMessage(conversationId, userId, {
+            const assistantMessage = await chatService.createAppMessage(userId, {
+                conversationId,
                 role: "assistant",
                 parsedContent: fallback.structuredOutput,
                 errorResponse: error instanceof Error ? error.message : String(error),

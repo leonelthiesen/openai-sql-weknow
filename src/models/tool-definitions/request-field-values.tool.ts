@@ -8,22 +8,24 @@ export function getRequestFieldValuesToolDefinition(): FunctionTool {
         type: "function",
         name: "request_field_values",
         description: description(
-            "Solicita os valores distintos existentes em um campo categórico/texto antes de construir um filtro.",
-            "Use SOMENTE quando: (1) o campo é do tipo string/categórico, (2) você não tem certeza do valor exato armazenado, (3) o usuário não forneceu um valor literal exato.",
-            "NÃO use para campos numéricos, de data/hora ou booleanos.",
-            "O usuário será solicitado a aprovar ou negar. Se aprovado, você receberá até 100 valores distintos, o total de distintos e um flag truncated.",
-            "Se negado ou timeout, você receberá userDenied:true — prossiga inferindo o valor a partir do contexto (ex: LIKE/STARTS_WITH).",
+            "Use when user request an output that requires filtering on one or more string/categorical fields.",
+            "This allows you to know the exact values in the database and build precise filters, improving accuracy and avoiding mistakes due to guessing.",
+            "Use BEFORE extract_data call when needing to build a filter.",
+            "Use ONLY when the field is of type string/categorical",
+            "Do NOT use for numeric, date/time, or boolean fields.",
+            "The user will be asked to approve or deny. If approved, you will receive up to 100 distinct values, the total distinct count, and a truncated flag.",
+            "If denied or timeout, you will receive userDenied:true — proceed by inferring the value from context (e.g., LIKE/STARTS_WITH).",
         ),
         parameters: {
             type: "object",
             properties: {
                 fieldCompleteName: {
                     type: "string",
-                    description: "O completeName do campo cujos valores distintos são necessários. Deve corresponder exatamente a um dos completeNames disponíveis.",
+                    description: "The completeName of the field whose distinct values are needed. Must exactly match one of the available completeNames.",
                 },
                 reason: {
                     type: "string",
-                    description: "Breve explicação em PORTUGUÊS de por que os valores são necessários. Ex: 'Para filtrar corretamente a cidade, preciso saber os valores exatos disponíveis.'",
+                    description: "Brief explanation of why the values are needed. E.g.: 'To correctly filter the city, I need to know the exact available values.'",
                 },
             },
             required: ["fieldCompleteName", "reason"],

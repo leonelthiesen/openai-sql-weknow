@@ -13,7 +13,8 @@ export function getExtractDataToolDefinition(): FunctionTool {
       "The virtual table fields are defined in the conversation context.",
       "You will receive as a result, an schema of the columns with a obfuscated data limited to 10 records, to help you understand the data types and values. Use this information to better infer the user's intent.",
       "The result will be rendered as a chart (with option to view in a data table), a data table, or a user friendly message depending on renderType.",
-      "If any required detail is missing or ambiguous, call ask_followup instead.",
+      "When a filter on a string/categorical field is needed, always use request_field_values first to get the exact values and build precise filters. Never guess values for string/categorical fields.",
+      "If any other required detail is missing or ambiguous, call ask_followup instead.",
     ),
     parameters: {
       type: "object",

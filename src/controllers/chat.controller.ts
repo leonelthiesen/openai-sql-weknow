@@ -135,7 +135,8 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
       folderId
     );
 
-    const userAppMessage = await chatService.createAppMessage(newConversation.id, userId, {
+    const userAppMessage = await chatService.createAppMessage(userId, {
+      conversationId: newConversation.id,
       role: "user",
       content: userTextMessage,
       openAiItems: [
@@ -267,7 +268,8 @@ export const addUserMessageToConversation = async (
 
     const conversationId = id;
 
-    const userAppMessage = await chatService.createAppMessage(conversationId, userId, {
+    const userAppMessage = await chatService.createAppMessage(userId, {
+      conversationId,
       role: "user",
       content: userTextMessage,
       openAiItems: [
