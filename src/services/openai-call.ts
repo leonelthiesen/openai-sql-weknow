@@ -22,7 +22,7 @@ const MODEL = "gpt-5.4-mini";
 
 const SHARED_OPTIONS = {
     model: MODEL,
-    // reasoning: { effort: "low" as const },
+    reasoning: { effort: "low" as const },
     include: ["reasoning.encrypted_content"] as OpenAI.Responses.ResponseIncludable[],
 };
 

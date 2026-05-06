@@ -1,11 +1,51 @@
 import { type Request, type Response } from "express";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import { MetadataField } from "../constants";
+import { TFieldType } from "../models/TFieldType";
 import * as chatService from "../services/chat.service";
 import { generateConversationNameSuggestion } from "../services/open-ai.service";
 import { logger } from "../utils/logger";
 import { jobStore } from "../pipeline/job-store";
 import { runPipeline } from "../pipeline/pipeline-orchestrator";
+
+type SimpleFieldType = "string" | "number" | "date" | "boolean" | "other";
+
+const STRING_FIELD_TYPES = new Set<number>([
+  TFieldType.ftString, TFieldType.ftFixedChar, TFieldType.ftWideString,
+  TFieldType.ftFixedWideChar, TFieldType.ftMemo, TFieldType.ftWideMemo,
+  TFieldType.ftFmtMemo, TFieldType.ftGuid,
+]);
+const NUMBER_FIELD_TYPES = new Set<number>([
+  TFieldType.ftSmallint, TFieldType.ftInteger, TFieldType.ftWord, TFieldType.ftFloat,
+  TFieldType.ftCurrency, TFieldType.ftBCD, TFieldType.ftAutoInc, TFieldType.ftLargeint,
+  TFieldType.ftFMTBcd, TFieldType.ftLongWord, TFieldType.ftShortint, TFieldType.ftByte,
+  TFieldType.ftExtended, TFieldType.ftSingle,
+]);
+const DATE_FIELD_TYPES = new Set<number>([
+  TFieldType.ftDate, TFieldType.ftTime, TFieldType.ftDateTime,
+  TFieldType.ftTimeStamp, TFieldType.ftOraTimeStamp, TFieldType.ftTimeStampOffset,
+]);
+
+function categorizeFieldType(fieldType: unknown): SimpleFieldType {
+  let numericType: number | undefined;
+  if (typeof fieldType === "number") {
+    numericType = fieldType;
+  } else if (typeof fieldType === "string") {
+    const trimmed = fieldType.trim();
+    if (/^-?\d+$/.test(trimmed)) {
+      numericType = Number(trimmed);
+    } else {
+      const lookup = (TFieldType as unknown as Record<string, number>)[trimmed];
+      if (typeof lookup === "number") numericType = lookup;
+    }
+  }
+  if (numericType === undefined) return "other";
+  if (numericType === TFieldType.ftBoolean) return "boolean";
+  if (STRING_FIELD_TYPES.has(numericType)) return "string";
+  if (NUMBER_FIELD_TYPES.has(numericType)) return "number";
+  if (DATE_FIELD_TYPES.has(numericType)) return "date";
+  return "other";
+}
 
 interface FieldMetadata extends MetadataField {
   title?: string;
@@ -44,10 +84,16 @@ function isNonReasoningOpenAiItem(
 
 const buildFieldsJsonString = (metadataFields: FieldMetadata[]): string => {
   const outFields = metadataFields.map((field) => {
+    const simpleType = categorizeFieldType(field.fieldType);
     const outField: Record<string, unknown> = {
       completeName: field.completeName,
       title: field.title,
+      fieldType: simpleType,
     };
+
+    if (simpleType === "string") {
+      return outField;
+    }
 
     if (field.formatOptions?.options && field.formatOptions.options.length > 0) {
       const maxOptions = 5;

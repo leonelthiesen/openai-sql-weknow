@@ -236,6 +236,7 @@ async function _runPipelineInner(job: Job): Promise<void> {
                 });
             } else if (primaryArgs.toolName === "extract_data") {
                 stageParams.parsedArgs = primaryArgs as ExtractDataArgs;
+                logComplianceForExtractData(primaryArgs as ExtractDataArgs, currentInput);
                 switch (primaryArgs.renderType) {
                     case "TABLE":
                         stageResult = await runTableStage(stageParams);
@@ -361,4 +362,58 @@ function buildNextInput(
         ...toInputItems(responseOutput),
         { type: "function_call_output", call_id: callId, output: outputStr } as ResponseInputItem,
     ];
+}
+
+const STRING_FILTER_OPERATORS = new Set(["=", "!=", "IN", "LIKE", "STARTS_WITH", "ENDS_WITH"]);
+
+function collectFieldsRequestedEarlier(input: ResponseInputItem[]): Set<string> {
+    const fieldNames = new Set<string>();
+    for (const item of input) {
+        const anyItem = item as { type?: string; name?: string; arguments?: string };
+        if (anyItem.type === "function_call" && anyItem.name === "request_field_values" && typeof anyItem.arguments === "string") {
+            try {
+                const args = JSON.parse(anyItem.arguments) as { fieldCompleteName?: unknown };
+                if (typeof args.fieldCompleteName === "string") fieldNames.add(args.fieldCompleteName);
+            } catch {
+                /* ignore */
+            }
+        }
+    }
+    return fieldNames;
+}
+
+interface FilterNode {
+    completeName?: unknown;
+    operator?: unknown;
+    filters?: unknown;
+}
+
+function collectFilteredFields(node: unknown, acc: Map<string, string>): void {
+    if (!node || typeof node !== "object") return;
+    const n = node as FilterNode;
+    if (typeof n.completeName === "string" && typeof n.operator === "string") {
+        acc.set(n.completeName, n.operator);
+    }
+    if (Array.isArray(n.filters)) {
+        for (const child of n.filters) collectFilteredFields(child, acc);
+    }
+}
+
+function logComplianceForExtractData(args: ExtractDataArgs, currentInput: ResponseInputItem[]): void {
+    const root = (args as unknown as { query?: { filters?: unknown } }).query?.filters;
+    if (!root) return;
+    const filteredFields = new Map<string, string>();
+    collectFilteredFields(root, filteredFields);
+    if (filteredFields.size === 0) return;
+
+    const requestedFields = collectFieldsRequestedEarlier(currentInput);
+    const violations: { field: string; operator: string }[] = [];
+    for (const [field, operator] of filteredFields) {
+        if (!STRING_FILTER_OPERATORS.has(operator)) continue;
+        if (requestedFields.has(field)) continue;
+        violations.push({ field, operator });
+    }
+    if (violations.length > 0) {
+        logger.warn("compliance", "extract_data filter without prior request_field_values", { violations });
+    }
 }

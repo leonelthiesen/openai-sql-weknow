@@ -69,6 +69,6 @@ export function buildDeniedResult(fieldCompleteName: string): FieldValuesDeniedR
         approved: false,
         fieldCompleteName,
         userDenied: true,
-        message: "Usuário não autorizou. Infira o valor do filtro a partir do contexto disponível.",
+        message: "Usuário não autorizou. Use LIKE/STARTS_WITH com o termo literal informado pelo usuário; NÃO invente valores que o usuário não mencionou.",
     };
 }
