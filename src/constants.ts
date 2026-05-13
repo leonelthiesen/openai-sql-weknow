@@ -63,6 +63,11 @@ extract_data({
 \`\`\`
 - Use \`filters\` (WHERE) for row-level filtering before aggregation.
 - Use \`havingFilters\` (HAVING) for post-aggregation filtering.
+- **Date/DateTime/Time filter values** — always use ISO 8601 without timezone:
+  - \`fieldType: "date"\` → \`"YYYY-MM-DD"\` (ex.: \`"2025-01-31"\`)
+  - \`fieldType: "datetime"\` → \`"YYYY-MM-DDTHH:mm:ss"\` (ex.: \`"2025-01-31T23:59:59"\`)
+  - \`fieldType: "time"\` → \`"HH:mm:ss"\`
+  - Never include \`Z\`, offsets like \`+03:00\`, or locale formats like \`DD/MM/YYYY\`.
 - For calculated fields with \`hasAggregateFunction=true\`, reference with \`aggregateFunction=NONE\`.
 - Always include sorting (\`categorySort\` or \`seriesSort\`).
 - **Hard rule**: a WHERE/HAVING filter whose target field has \`fieldType: "string"\` MUST use values returned by a prior \`request_field_values\` call (or \`LIKE\`/\`STARTS_WITH\` if the user denied).

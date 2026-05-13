@@ -7,13 +7,13 @@ import { handleExtractData } from "../../services/tool-handlers/extract-data.han
 import { handleAskFollowup } from "../../services/tool-handlers/ask-followup.handler";
 import { requestCorrectedCall, MAX_RETRY_ATTEMPTS } from "../../services/llm-retry";
 import { parseWithRetry } from "../../services/parse-with-retry";
-import { parseToolArgs, ToolValidationError } from "../../utils/tool-args-parser";
+import { parseToolArgs, ToolValidationError, type ParseToolArgsOptions } from "../../utils/tool-args-parser";
 import { logger } from "../../utils/logger";
 
 // Re-export for stage consumers
 export { MAX_RETRY_ATTEMPTS } from "../../services/llm-retry";
 
-const MAX_EMPTY_RETRIES = 2;
+const MAX_EMPTY_RETRIES = 3;
 
 const EMPTY_RESULT_OUTPUT =
     "Query executed successfully but returned 0 rows. The query was syntactically valid; no records match the criteria. " +
@@ -40,7 +40,7 @@ export interface ExecuteWithRetryParams {
     tools: OpenAI.Responses.Tool[];
     metadataId: number;
     openAiItems: OpenAiItem[];
-    parseOptions?: { availableFieldNames?: string[] };
+    parseOptions?: ParseToolArgsOptions;
     onAttemptStart?: (attempt: number) => void;
     onDataReceived?: (rowCount: number) => void;
 }
@@ -75,7 +75,7 @@ export async function executeExtractDataWithRetry(
         onAttemptStart?.(attempt);
         logger.tool("extract_data", { attempt, metadataId });
 
-        const result = await handleExtractData(currentArgs, metadataId);
+        const result = await handleExtractData(currentArgs, metadataId, parseOptions?.metadataFields);
 
         if (result.success) {
             // Keep only cols that have a completeName
@@ -207,7 +207,7 @@ export async function executeExtractDataWithRetry(
                     baseInput,
                     tools,
                     openAiItems,
-                    parseOptions: { availableFieldNames: parseOptions?.availableFieldNames },
+                    parseOptions,
                 });
 
                 if (!parsedNext || parsedNext.args.toolName !== "extract_data") {

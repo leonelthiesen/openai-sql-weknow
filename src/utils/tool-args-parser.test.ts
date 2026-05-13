@@ -185,6 +185,81 @@ function makeExtractDataArgsWithCalculatedFormula(formula: string) {
     });
 }
 
+function makeExtractDataArgsWithFilterValue(value: unknown, operator: string = "=") {
+    return JSON.stringify({
+        message: "Mensagem",
+        userMessageSuggestions: [],
+        renderType: "TABLE",
+        query: {
+            measures: [{ completeName: "mes.total", aggregateFunction: "SUM", title: "Total" }],
+            filters: {
+                join: "AND",
+                filters: [
+                    {
+                        completeName: "venda.data",
+                        filters: [],
+                        join: "AND",
+                        not: false,
+                        operator,
+                        values: [value],
+                    },
+                ],
+            },
+        },
+    });
+}
+
+describe("parseToolArgs extract_data date filter validation", () => {
+    const dateMetadata = [{ completeName: "venda.data", fieldType: "ftDate" }];
+    const datetimeMetadata = [{ completeName: "venda.data", fieldType: "ftDateTime" }];
+
+    it("accepts ISO 8601 date for ftDate field", () => {
+        const args = makeExtractDataArgsWithFilterValue("2025-01-31");
+        const parsed = parseToolArgs("extract_data", args, { metadataFields: dateMetadata });
+        expect(parsed.toolName).toBe("extract_data");
+    });
+
+    it("rejects DD/MM/YYYY for ftDate field", () => {
+        const args = makeExtractDataArgsWithFilterValue("01/03/2025");
+        expect(() => parseToolArgs("extract_data", args, { metadataFields: dateMetadata })).toThrow(
+            /ISO 8601/
+        );
+    });
+
+    it("rejects datetime with timezone marker for ftDateTime field", () => {
+        const args = makeExtractDataArgsWithFilterValue("2025-01-31T10:00:00Z");
+        expect(() =>
+            parseToolArgs("extract_data", args, { metadataFields: datetimeMetadata })
+        ).toThrow(ToolValidationError);
+    });
+
+    it("accepts ISO 8601 datetime without timezone for ftDateTime field", () => {
+        const args = makeExtractDataArgsWithFilterValue("2025-01-31T23:59:59");
+        const parsed = parseToolArgs("extract_data", args, { metadataFields: datetimeMetadata });
+        expect(parsed.toolName).toBe("extract_data");
+    });
+
+    it("ignores values when operator is IS_NULL", () => {
+        const args = makeExtractDataArgsWithFilterValue("not-a-date", "IS_NULL");
+        const parsed = parseToolArgs("extract_data", args, { metadataFields: dateMetadata });
+        expect(parsed.toolName).toBe("extract_data");
+    });
+
+    it("permits null values regardless of field kind", () => {
+        const args = makeExtractDataArgsWithFilterValue(null);
+        const parsed = parseToolArgs("extract_data", args, { metadataFields: dateMetadata });
+        expect(parsed.toolName).toBe("extract_data");
+    });
+
+    it("does not validate date format on non-date fields", () => {
+        const args = makeExtractDataArgsWithFilterValue("not-a-date");
+        const parsed = parseToolArgs("extract_data", args, {
+            metadataFields: [{ completeName: "venda.data", fieldType: "ftString" }],
+        });
+        expect(parsed.toolName).toBe("extract_data");
+    });
+});
+
 describe("parseToolArgs extract_data calculatedFields validation", () => {
     const availableFieldNames = ["mes.total", "dim.valor", "dim.status"];
 

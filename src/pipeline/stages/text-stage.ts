@@ -9,6 +9,7 @@ import { handleAskFollowup } from "../../services/tool-handlers/ask-followup.han
 import { handleFinalizeTextMessage } from "../../services/tool-handlers/finalize-text-message.handler";
 import { jobStore } from "../job-store";
 import { logger } from "../../utils/logger";
+import type { ParseToolArgsOptions } from "../../utils/tool-args-parser";
 
 export interface TextStageParams {
     jobId: string;
@@ -19,7 +20,7 @@ export interface TextStageParams {
     tools: OpenAI.Responses.Tool[];
     metadataId: number;
     openAiItems: OpenAiItem[];
-    parseOptions?: { availableFieldNames?: string[] };
+    parseOptions?: ParseToolArgsOptions;
 }
 
 const FALLBACK_SUGGESTIONS = [

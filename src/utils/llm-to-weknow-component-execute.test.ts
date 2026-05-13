@@ -108,6 +108,118 @@ describe("transformLLMToComponentExecuteInput sort direction normalization", () 
     });
 });
 
+describe("transformLLMToComponentExecuteInput filter date conversion to Delphi", () => {
+    it("converts ISO date filter values to Delphi floats when metadata says it's a date field", () => {
+        const structured: LLMStructuredOutput = {
+            action: "EXTRACT_DATA",
+            message: "ok",
+            userMessageSuggestions: [],
+            renderType: "TABLE",
+            query: {
+                calculatedFields: [],
+                categoryDimensions: [{ completeName: "dim.category", title: "Categoria" }],
+                measures: [{ completeName: "mes.total", aggregateFunction: "SUM", title: "Total" }],
+                filters: {
+                    join: "AND",
+                    filters: [
+                        {
+                            completeName: "venda.data",
+                            filters: [],
+                            join: "AND",
+                            not: false,
+                            operator: ">=",
+                            values: ["2025-01-31"],
+                        },
+                    ],
+                },
+                havingFilters: { join: "AND", filters: [] },
+            },
+        };
+
+        const output = transformLLMToComponentExecuteInput(structured, 10, [
+            { completeName: "venda.data", fieldType: TFieldType.ftDate },
+        ]);
+
+        const value = output?.contents?.whereFilters?.filters?.[0]?.values?.fixedValues?.[0];
+        expect(typeof value).toBe("number");
+        expect(value).toBe(45688);
+    });
+
+    it("leaves non-date filter values unchanged", () => {
+        const structured: LLMStructuredOutput = {
+            action: "EXTRACT_DATA",
+            message: "ok",
+            userMessageSuggestions: [],
+            renderType: "TABLE",
+            query: {
+                calculatedFields: [],
+                categoryDimensions: [{ completeName: "dim.category", title: "Categoria" }],
+                measures: [{ completeName: "mes.total", aggregateFunction: "SUM", title: "Total" }],
+                filters: {
+                    join: "AND",
+                    filters: [
+                        {
+                            completeName: "dim.status",
+                            filters: [],
+                            join: "AND",
+                            not: false,
+                            operator: "=",
+                            values: ["ativo"],
+                        },
+                    ],
+                },
+                havingFilters: { join: "AND", filters: [] },
+            },
+        };
+
+        const output = transformLLMToComponentExecuteInput(structured, 10, [
+            { completeName: "dim.status", fieldType: TFieldType.ftString },
+        ]);
+
+        const value = output?.contents?.whereFilters?.filters?.[0]?.values?.fixedValues?.[0];
+        expect(value).toBe("ativo");
+    });
+
+    it("converts datetime values using calculatedFields date-like dataType", () => {
+        const structured: LLMStructuredOutput = {
+            action: "EXTRACT_DATA",
+            message: "ok",
+            userMessageSuggestions: [],
+            renderType: "TABLE",
+            query: {
+                calculatedFields: [
+                    {
+                        completeName: "cf_evento",
+                        dataType: "DateTime",
+                        formula: "%venda.data_hora%",
+                        hasAggregateFunction: false,
+                    },
+                ],
+                categoryDimensions: [{ completeName: "dim.category", title: "Categoria" }],
+                measures: [{ completeName: "mes.total", aggregateFunction: "SUM", title: "Total" }],
+                filters: {
+                    join: "AND",
+                    filters: [
+                        {
+                            completeName: "cf_evento",
+                            filters: [],
+                            join: "AND",
+                            not: false,
+                            operator: ">=",
+                            values: ["1899-12-31T12:00:00"],
+                        },
+                    ],
+                },
+                havingFilters: { join: "AND", filters: [] },
+            },
+        };
+
+        const output = transformLLMToComponentExecuteInput(structured, 10);
+        const value = output?.contents?.whereFilters?.filters?.[0]?.values?.fixedValues?.[0];
+        expect(value).toBe(1.5);
+    });
+});
+
 describe("transformLLMToComponentExecuteInput calculated field dataType mapping", () => {
     it("maps tool schema textual dataType values to TFieldType", () => {
         const output = transformLLMToComponentExecuteInput({

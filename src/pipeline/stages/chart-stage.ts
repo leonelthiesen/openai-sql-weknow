@@ -13,6 +13,7 @@ import { buildEchartsOption } from "../../utils/build-echarts-option";
 import { buildVegaLiteSpec } from "../../utils/build-vega-lite-spec";
 import { jobStore } from "../job-store";
 import { logger } from "../../utils/logger";
+import type { ParseToolArgsOptions } from "../../utils/tool-args-parser";
 
 export interface ChartStageParams {
     jobId: string;
@@ -23,7 +24,7 @@ export interface ChartStageParams {
     tools: OpenAI.Responses.Tool[];
     metadataId: number;
     openAiItems: OpenAiItem[];
-    parseOptions?: { availableFieldNames?: string[] };
+    parseOptions?: ParseToolArgsOptions;
 }
 
 const FALLBACK_SUGGESTIONS = [

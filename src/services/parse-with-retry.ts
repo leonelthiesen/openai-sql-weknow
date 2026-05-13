@@ -2,7 +2,7 @@ import type OpenAI from "openai";
 import type { ResponseInputItem } from "openai/resources/responses/responses";
 import type { OpenAiItem } from "./chat.service";
 import type { ParsedToolArgs } from "../types/tool-args.types";
-import { parseToolArgs, ToolValidationError } from "../utils/tool-args-parser";
+import { parseToolArgs, ToolValidationError, type ParseToolArgsOptions } from "../utils/tool-args-parser";
 import { requestCorrectedCall, MAX_RETRY_ATTEMPTS } from "./llm-retry";
 import { logger } from "../utils/logger";
 
@@ -12,7 +12,7 @@ export interface ParseWithRetryParams {
     baseInput: ResponseInputItem[];
     tools: OpenAI.Responses.Tool[];
     openAiItems: OpenAiItem[];
-    parseOptions?: { availableFieldNames?: string[] };
+    parseOptions?: ParseToolArgsOptions;
 }
 
 export interface ParseWithRetryResult<T extends ParsedToolArgs = ParsedToolArgs> {
@@ -35,6 +35,7 @@ export async function parseWithRetry<T extends ParsedToolArgs = ParsedToolArgs>(
         try {
             const args = parseToolArgs(call.name, call.arguments, {
                 availableFieldNames: parseOptions?.availableFieldNames,
+                metadataFields: parseOptions?.metadataFields,
             }) as T;
             return { args, call, responseOutput };
         } catch (error) {

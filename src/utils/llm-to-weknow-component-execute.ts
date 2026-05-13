@@ -17,6 +17,13 @@ import { TBooleanOperator } from "../models/TBooleanOperator";
 import { TFieldType } from "../models/TFieldType";
 import { TMeasureFunction } from "../models/TMeasureFunction";
 import { TSortDirection } from "../models/TSortDirection";
+import {
+    detectDateFieldKind,
+    detectCalculatedFieldKind,
+    isoToDelphi,
+    type DateFieldKind,
+} from "./date-format";
+import type { FieldDescriptor } from "./tool-args-parser";
 
 function toMeasureFunction (aggregateFunction: LLMAggregateFunction): TMeasureFunction {
     switch (aggregateFunction) {
@@ -129,10 +136,26 @@ function toCalculatedFieldType(dataType: LLMCalculatedFieldType | undefined): TF
     }
 }
 
+function convertFilterValues(
+    values: ReadonlyArray<unknown>,
+    completeName: string,
+    dateKindMap: Map<string, DateFieldKind>
+): unknown[] {
+    const kind = dateKindMap.get(completeName);
+    if (!kind) return [...values];
+    return values.map((value) => {
+        if (typeof value !== "string") return value;
+        return isoToDelphi(value, kind);
+    });
+}
+
 /**
  * Converte LLMWhereFilters para TCustomWhereFilter
  */
-function convertWhereFilterNode (llmFilters: LLMWhereFilters): TCustomWhereFilter | undefined {
+function convertWhereFilterNode (
+    llmFilters: LLMWhereFilters,
+    dateKindMap: Map<string, DateFieldKind>
+): TCustomWhereFilter | undefined {
     if (!llmFilters || typeof llmFilters !== "object") {
         return undefined;
     }
@@ -140,7 +163,7 @@ function convertWhereFilterNode (llmFilters: LLMWhereFilters): TCustomWhereFilte
     if (!("completeName" in llmFilters)) {
         const childFilters = Array.isArray(llmFilters.filters)
             ? llmFilters.filters
-                .map(f => convertWhereFilterNode(f))
+                .map(f => convertWhereFilterNode(f, dateKindMap))
                 .filter(f => f !== undefined) as TCustomWhereFilter[]
             : [];
 
@@ -161,21 +184,24 @@ function convertWhereFilterNode (llmFilters: LLMWhereFilters): TCustomWhereFilte
 
     if (condition.values && condition.values.length > 0) {
         filter.values = {
-            fixedValues: condition.values,
+            fixedValues: convertFilterValues(condition.values, condition.completeName, dateKindMap),
             mode: TCustomFilterValueMode.fvmFixed
         };
     }
 
     if (condition.filters && condition.filters.length > 0) {
         filter.filters = condition.filters
-            .map(f => convertWhereFilterNode(f))
+            .map(f => convertWhereFilterNode(f, dateKindMap))
             .filter(f => f !== undefined) as TCustomWhereFilter[];
     }
 
     return filter;
 }
 
-function convertWhereFiltersRoot (llmFilters: LLMWhereFilters): TCustomWhereFilterRoot | undefined {
+function convertWhereFiltersRoot (
+    llmFilters: LLMWhereFilters,
+    dateKindMap: Map<string, DateFieldKind>
+): TCustomWhereFilterRoot | undefined {
     if (!llmFilters || typeof llmFilters !== "object") {
         return undefined;
     }
@@ -187,7 +213,7 @@ function convertWhereFiltersRoot (llmFilters: LLMWhereFilters): TCustomWhereFilt
     return {
         join: toBooleanOperator(llmFilters.join),
         filters: llmFilters.filters
-            .map(f => convertWhereFilterNode(f))
+            .map(f => convertWhereFilterNode(f, dateKindMap))
             .filter(f => f !== undefined) as TCustomWhereFilter[],
     };
 }
@@ -195,7 +221,10 @@ function convertWhereFiltersRoot (llmFilters: LLMWhereFilters): TCustomWhereFilt
 /**
  * Converte LLMHavingFilters para TCustomHavingFilter
  */
-function convertHavingFilterNode (llmFilters: LLMHavingFilters): TCustomHavingFilter | undefined {
+function convertHavingFilterNode (
+    llmFilters: LLMHavingFilters,
+    dateKindMap: Map<string, DateFieldKind>
+): TCustomHavingFilter | undefined {
     if (!llmFilters || typeof llmFilters !== "object") {
         return undefined;
     }
@@ -203,7 +232,7 @@ function convertHavingFilterNode (llmFilters: LLMHavingFilters): TCustomHavingFi
     if (!("completeName" in llmFilters)) {
         const childFilters = Array.isArray(llmFilters.filters)
             ? llmFilters.filters
-                .map(f => convertHavingFilterNode(f))
+                .map(f => convertHavingFilterNode(f, dateKindMap))
                 .filter(f => f !== undefined) as TCustomHavingFilter[]
             : [];
 
@@ -225,21 +254,24 @@ function convertHavingFilterNode (llmFilters: LLMHavingFilters): TCustomHavingFi
 
     if (condition.values && condition.values.length > 0) {
         filter.values = {
-            fixedValues: condition.values,
+            fixedValues: convertFilterValues(condition.values, condition.completeName, dateKindMap),
             mode: TCustomFilterValueMode.fvmFixed
         };
     }
 
     if (condition.filters && condition.filters.length > 0) {
         filter.filters = condition.filters
-            .map(f => convertHavingFilterNode(f))
+            .map(f => convertHavingFilterNode(f, dateKindMap))
             .filter(f => f !== undefined) as TCustomHavingFilter[];
     }
 
     return filter;
 }
 
-function convertHavingFiltersRoot (llmFilters: LLMHavingFilters): TCustomHavingFilterRoot | undefined {
+function convertHavingFiltersRoot (
+    llmFilters: LLMHavingFilters,
+    dateKindMap: Map<string, DateFieldKind>
+): TCustomHavingFilterRoot | undefined {
     if (!llmFilters || typeof llmFilters !== "object") {
         return undefined;
     }
@@ -251,9 +283,31 @@ function convertHavingFiltersRoot (llmFilters: LLMHavingFilters): TCustomHavingF
     return {
         join: toBooleanOperator(llmFilters.join),
         filters: llmFilters.filters
-            .map(f => convertHavingFilterNode(f))
+            .map(f => convertHavingFilterNode(f, dateKindMap))
             .filter(f => f !== undefined) as TCustomHavingFilter[],
     };
+}
+
+function buildDateKindMap(
+    metadataFields: ReadonlyArray<FieldDescriptor> | undefined,
+    calculatedFields: ReadonlyArray<{ completeName?: string; dataType?: LLMCalculatedFieldType }> | undefined
+): Map<string, DateFieldKind> {
+    const map = new Map<string, DateFieldKind>();
+    if (metadataFields) {
+        for (const field of metadataFields) {
+            if (!field.completeName) continue;
+            const kind = detectDateFieldKind(field.fieldType);
+            if (kind) map.set(field.completeName, kind);
+        }
+    }
+    if (calculatedFields) {
+        for (const cf of calculatedFields) {
+            if (!cf?.completeName) continue;
+            const kind = detectCalculatedFieldKind(cf.dataType);
+            if (kind) map.set(cf.completeName, kind);
+        }
+    }
+    return map;
 }
 
 /**
@@ -269,7 +323,8 @@ function convertHavingFiltersRoot (llmFilters: LLMHavingFilters): TCustomHavingF
  */
 export function transformLLMToComponentExecuteInput (
     botMessageContent: string | LLMStructuredOutput,
-    metadataId: number
+    metadataId: number,
+    metadataFields?: ReadonlyArray<FieldDescriptor>
 ): TComponentApi_TExecutePivotTableCustomInput | null {
     if (typeof botMessageContent === 'string') {
         return null;
@@ -282,6 +337,7 @@ export function transformLLMToComponentExecuteInput (
     }
 
     const query = llmOutput.query;
+    const dateKindMap = buildDateKindMap(metadataFields, query.calculatedFields);
 
     // Converte os calculated fields
     const calculatedFields = query.calculatedFields?.filter(cf => cf.completeName)?.map(cf => ({
@@ -337,8 +393,8 @@ export function transformLLMToComponentExecuteInput (
         }));
 
     // Converte os filtros
-    const whereFilters = query.filters ? convertWhereFiltersRoot(query.filters) : undefined;
-    const havingFilters = query.havingFilters ? convertHavingFiltersRoot(query.havingFilters) : undefined;
+    const whereFilters = query.filters ? convertWhereFiltersRoot(query.filters, dateKindMap) : undefined;
+    const havingFilters = query.havingFilters ? convertHavingFiltersRoot(query.havingFilters, dateKindMap) : undefined;
 
     // Monta o objeto final (pivot table)
     const executeInput: TComponentApi_TExecutePivotTableCustomInput = {

@@ -5,9 +5,22 @@ import type {
     ExtractTextValuesArgs,
     RequestFieldValuesArgs,
 } from "../types/tool-args.types";
+import {
+    detectDateFieldKind,
+    detectCalculatedFieldKind,
+    expectedFormatLabel,
+    isValidIsoForKind,
+    type DateFieldKind,
+} from "./date-format";
 
-interface ParseToolArgsOptions {
+export interface FieldDescriptor {
+    completeName: string;
+    fieldType: string | number;
+}
+
+export interface ParseToolArgsOptions {
     availableFieldNames?: string[];
+    metadataFields?: FieldDescriptor[];
 }
 
 const VALID_COMPARISON_OPERATORS = new Set([
@@ -45,7 +58,7 @@ export function parseToolArgs(name: string, rawArguments: string, options: Parse
 
     switch (name) {
         case "extract_data":
-            return parseExtractDataArgs(parsed, options.availableFieldNames);
+            return parseExtractDataArgs(parsed, options.availableFieldNames, options.metadataFields);
         case "ask_followup":
             return parseAskFollowupArgs(parsed);
         case "extract_text_values":
@@ -57,7 +70,11 @@ export function parseToolArgs(name: string, rawArguments: string, options: Parse
     }
 }
 
-function parseExtractDataArgs(parsed: any, availableFieldNames: string[] = []): ExtractDataArgs {
+function parseExtractDataArgs(
+    parsed: any,
+    availableFieldNames: string[] = [],
+    metadataFields: FieldDescriptor[] = []
+): ExtractDataArgs {
     if (!parsed.message || typeof parsed.message !== "string") {
         throw new ToolValidationError("extract_data", "Missing or invalid 'message'");
     }
@@ -77,6 +94,10 @@ function parseExtractDataArgs(parsed: any, availableFieldNames: string[] = []): 
     validateComparisonOperators(parsed.query.havingFilters, "query.havingFilters");
     validateCalculatedFields(parsed.query.calculatedFields, availableFieldNames);
 
+    const dateKindMap = buildDateKindMap(metadataFields, parsed.query.calculatedFields);
+    validateFilterDateValues(parsed.query.filters, dateKindMap, "query.filters");
+    validateFilterDateValues(parsed.query.havingFilters, dateKindMap, "query.havingFilters");
+
     return {
         toolName: "extract_data",
         message: parsed.message,
@@ -84,6 +105,58 @@ function parseExtractDataArgs(parsed: any, availableFieldNames: string[] = []): 
         renderType: parsed.renderType,
         query: parsed.query,
     };
+}
+
+function buildDateKindMap(
+    metadataFields: FieldDescriptor[],
+    calculatedFields: unknown
+): Map<string, DateFieldKind> {
+    const map = new Map<string, DateFieldKind>();
+    for (const field of metadataFields) {
+        const kind = detectDateFieldKind(field.fieldType);
+        if (kind && field.completeName) {
+            map.set(field.completeName, kind);
+        }
+    }
+    if (Array.isArray(calculatedFields)) {
+        for (const cf of calculatedFields) {
+            if (!cf || typeof cf !== "object") continue;
+            const c = cf as { completeName?: unknown; dataType?: unknown };
+            if (typeof c.completeName !== "string") continue;
+            const kind = detectCalculatedFieldKind(c.dataType);
+            if (kind) map.set(c.completeName, kind);
+        }
+    }
+    return map;
+}
+
+function validateFilterDateValues(
+    filterNode: any,
+    dateKindMap: Map<string, DateFieldKind>,
+    path: string
+): void {
+    if (!filterNode || typeof filterNode !== "object") return;
+
+    if (typeof filterNode.completeName === "string") {
+        const kind = dateKindMap.get(filterNode.completeName);
+        if (kind && filterNode.operator !== "IS_NULL" && Array.isArray(filterNode.values)) {
+            filterNode.values.forEach((value: unknown, index: number) => {
+                if (value === null || value === undefined) return;
+                if (!isValidIsoForKind(value, kind)) {
+                    throw new ToolValidationError(
+                        "extract_data",
+                        `${path}.values[${index}] must be ISO 8601 '${expectedFormatLabel(kind)}' (no timezone) for ${kind} field '${filterNode.completeName}'; got ${JSON.stringify(value)}`
+                    );
+                }
+            });
+        }
+    }
+
+    if (Array.isArray(filterNode.filters)) {
+        filterNode.filters.forEach((child: any, index: number) =>
+            validateFilterDateValues(child, dateKindMap, `${path}.filters[${index}]`)
+        );
+    }
 }
 
 function validateCalculatedFields(calculatedFields: unknown, availableFieldNames: string[]): void {

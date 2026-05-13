@@ -9,6 +9,7 @@ import { executeExtractDataWithRetry } from "./extract-data-shared";
 import { toEChartsDataset } from "../../utils/to-echarts-dataset";
 import { handleAskFollowup } from "../../services/tool-handlers/ask-followup.handler";
 import { jobStore } from "../job-store";
+import type { ParseToolArgsOptions } from "../../utils/tool-args-parser";
 
 export interface TableStageParams {
     jobId: string;
@@ -19,7 +20,7 @@ export interface TableStageParams {
     tools: OpenAI.Responses.Tool[];
     metadataId: number;
     openAiItems: OpenAiItem[];
-    parseOptions?: { availableFieldNames?: string[] };
+    parseOptions?: ParseToolArgsOptions;
 }
 
 export interface StageResult {

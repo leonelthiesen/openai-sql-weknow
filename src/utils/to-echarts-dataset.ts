@@ -21,6 +21,7 @@ export interface ClassifiedColumn {
 
 export interface EChartsDatasetResult {
     dataset: { source: DatasetSource };
+    tableSource: DatasetSource;
     layout: "kpi" | "simple" | "pivot";
     axisDim?: ClassifiedColumn;
     seriesDim?: ClassifiedColumn;
@@ -139,8 +140,10 @@ function cellToString(val: PivotGridCellValue): string {
 function buildKpi(measures: ClassifiedColumn[], rows: PivotGridRow[]): EChartsDatasetResult {
     const headers = measures.map(m => m.label);
     const values = measures.map(m => rows[0]?.[m.index] ?? 0);
+    const source: DatasetSource = [headers, values];
     return {
-        dataset: { source: [headers, values] },
+        dataset: { source },
+        tableSource: source,
         layout: "kpi",
         measures,
     };
@@ -162,6 +165,7 @@ function buildSimple(
 
     return {
         dataset: { source },
+        tableSource: source,
         layout: "simple",
         axisDim: dim,
         measures,
@@ -249,8 +253,26 @@ function buildPivot(
         source.push(row);
     }
 
+    // Long-format table: each dimension and measure in its own column, one row per original record
+    const tableHeaders: (string | number | boolean | null)[] = [
+        axisDim.label,
+        ...extraDims.map(d => d.label),
+        seriesDim.label,
+        ...measures.map(m => m.label),
+    ];
+    const tableSource: DatasetSource = [tableHeaders];
+    for (const row of rows) {
+        tableSource.push([
+            row[axisDim.index] ?? null,
+            ...extraDims.map(d => row[d.index] ?? null),
+            row[seriesDim.index] ?? null,
+            ...measures.map(m => row[m.index] ?? 0),
+        ]);
+    }
+
     return {
         dataset: { source },
+        tableSource,
         layout: "pivot",
         axisDim,
         seriesDim,

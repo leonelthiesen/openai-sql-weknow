@@ -117,7 +117,10 @@ async function _runPipelineInner(job: Job): Promise<void> {
                 baseInput: currentInput,
                 tools: primaryTools,
                 openAiItems,
-                parseOptions: { availableFieldNames: options?.availableFieldNames },
+                parseOptions: {
+                    availableFieldNames: options?.availableFieldNames,
+                    metadataFields: options?.metadataFields,
+                },
             });
 
             if (!parsed) {
@@ -225,7 +228,10 @@ async function _runPipelineInner(job: Job): Promise<void> {
                 tools: primaryTools,
                 metadataId,
                 openAiItems,
-                parseOptions: { availableFieldNames: options?.availableFieldNames },
+                parseOptions: {
+                    availableFieldNames: options?.availableFieldNames,
+                    metadataFields: options?.metadataFields,
+                },
             };
 
             if (primaryArgs.toolName === "ask_followup") {

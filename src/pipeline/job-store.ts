@@ -8,6 +8,7 @@ import type {
     JobResult,
 } from "./pipeline-events";
 import { logger } from "../utils/logger";
+import type { FieldDescriptor } from "../utils/tool-args-parser";
 
 // ── Approval timeout error ───────────────────────────────────────────────────
 
@@ -27,7 +28,7 @@ export interface Job {
     userId: string;
     metadataId: number;
     input: ResponseInputItem[];
-    options?: { availableFieldNames?: string[]; };
+    options?: { availableFieldNames?: string[]; metadataFields?: FieldDescriptor[]; };
     userMessageId?: string;
     result?: JobResult;
     error?: string;
@@ -75,7 +76,7 @@ class JobStore {
         userId: string;
         metadataId: number;
         input: ResponseInputItem[];
-        options?: { availableFieldNames?: string[]; conversationName?: string };
+        options?: { availableFieldNames?: string[]; metadataFields?: FieldDescriptor[]; conversationName?: string };
     }): Job {
         const id = randomUUID();
         const job: Job = {

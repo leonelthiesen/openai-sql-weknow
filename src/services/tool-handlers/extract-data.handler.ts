@@ -1,6 +1,7 @@
 import type { ExtractDataArgs } from "../../types/tool-args.types";
 import type { ToolExecutionResult } from "../../types/tool-result.types";
 import { transformLLMToComponentExecuteInput } from "../../utils/llm-to-weknow-component-execute";
+import type { FieldDescriptor } from "../../utils/tool-args-parser";
 import * as weknowService from "../weknow.service";
 import { logger } from "../../utils/logger";
 
@@ -20,7 +21,8 @@ function isRetriable(errorMessage: string): boolean {
 
 export async function handleExtractData(
     args: ExtractDataArgs,
-    metadataId: number
+    metadataId: number,
+    metadataFields?: ReadonlyArray<FieldDescriptor>
 ): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
@@ -33,7 +35,7 @@ export async function handleExtractData(
     };
 
     try {
-        const executeInput = transformLLMToComponentExecuteInput(structuredOutput, metadataId);
+        const executeInput = transformLLMToComponentExecuteInput(structuredOutput, metadataId, metadataFields);
         if (!executeInput) {
             return {
                 success: false,
@@ -46,6 +48,7 @@ export async function handleExtractData(
 
         const accessToken = await weknowService.getAccessToken();
         executeInput.accessToken = accessToken;
+        console.log("Executing component with input:", JSON.stringify(executeInput.contents?.whereFilters, null, 2));
         const response = await weknowService.executePivotGridComponent(JSON.stringify(executeInput));
 
         logger.toolResult("extract_data", {

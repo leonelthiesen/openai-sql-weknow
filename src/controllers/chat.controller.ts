@@ -8,7 +8,7 @@ import { logger } from "../utils/logger";
 import { jobStore } from "../pipeline/job-store";
 import { runPipeline } from "../pipeline/pipeline-orchestrator";
 
-type SimpleFieldType = "string" | "number" | "date" | "boolean" | "other";
+type SimpleFieldType = "string" | "number" | "date" | "datetime" | "time" | "boolean" | "other";
 
 const STRING_FIELD_TYPES = new Set<number>([
   TFieldType.ftString, TFieldType.ftFixedChar, TFieldType.ftWideString,
@@ -21,9 +21,9 @@ const NUMBER_FIELD_TYPES = new Set<number>([
   TFieldType.ftFMTBcd, TFieldType.ftLongWord, TFieldType.ftShortint, TFieldType.ftByte,
   TFieldType.ftExtended, TFieldType.ftSingle,
 ]);
-const DATE_FIELD_TYPES = new Set<number>([
-  TFieldType.ftDate, TFieldType.ftTime, TFieldType.ftDateTime,
-  TFieldType.ftTimeStamp, TFieldType.ftOraTimeStamp, TFieldType.ftTimeStampOffset,
+const DATETIME_FIELD_TYPES = new Set<number>([
+  TFieldType.ftDateTime, TFieldType.ftTimeStamp,
+  TFieldType.ftOraTimeStamp, TFieldType.ftTimeStampOffset,
 ]);
 
 function categorizeFieldType(fieldType: unknown): SimpleFieldType {
@@ -43,7 +43,9 @@ function categorizeFieldType(fieldType: unknown): SimpleFieldType {
   if (numericType === TFieldType.ftBoolean) return "boolean";
   if (STRING_FIELD_TYPES.has(numericType)) return "string";
   if (NUMBER_FIELD_TYPES.has(numericType)) return "number";
-  if (DATE_FIELD_TYPES.has(numericType)) return "date";
+  if (numericType === TFieldType.ftDate) return "date";
+  if (numericType === TFieldType.ftTime) return "time";
+  if (DATETIME_FIELD_TYPES.has(numericType)) return "datetime";
   return "other";
 }
 
@@ -222,6 +224,11 @@ export const startConversation = async (req: Request<{}, {}, StartConversationBo
             (fieldName): fieldName is string =>
               typeof fieldName === "string" && fieldName.length > 0
           ),
+        metadataFields: metadataFields
+          .filter((field): field is FieldMetadata & { completeName: string } =>
+            typeof field.completeName === "string" && field.completeName.length > 0
+          )
+          .map((field) => ({ completeName: field.completeName, fieldType: field.fieldType })),
         conversationName,
       },
     });
@@ -342,6 +349,11 @@ export const addUserMessageToConversation = async (
             (fieldName): fieldName is string =>
               typeof fieldName === "string" && fieldName.length > 0
           ),
+        metadataFields: conversation.metadataFields
+          .filter((field) =>
+            typeof field.completeName === "string" && field.completeName.length > 0
+          )
+          .map((field) => ({ completeName: field.completeName, fieldType: field.fieldType })),
       },
     });
     job.userMessageId = userAppMessage.id;
