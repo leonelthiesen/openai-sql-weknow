@@ -70,17 +70,17 @@ export function isValidIsoForKind(value: unknown, kind: DateFieldKind): boolean 
   if (!regex.test(value)) return false;
 
   if (kind === "date") {
-    const [y, m, d] = value.split("-").map(Number);
+    const [y, m, d] = value.split("-").map(Number) as [number, number, number];
     return isValidCalendarDate(y, m, d);
   }
   if (kind === "time") {
-    const [h, min, s = "0"] = value.split(":");
+    const [h, min, s = "0"] = value.split(":") as [string, string, string?];
     return isValidTimeOfDay(Number(h), Number(min), Number(s));
   }
-  const [datePart, timePart] = value.split("T");
-  const [y, m, d] = datePart.split("-").map(Number);
+  const [datePart, timePart] = value.split("T") as [string, string];
+  const [y, m, d] = datePart.split("-").map(Number) as [number, number, number];
   if (!isValidCalendarDate(y, m, d)) return false;
-  const [hh, mm, rest = "0"] = timePart.split(":");
+  const [hh, mm, rest = "0"] = timePart.split(":") as [string, string, string?];
   const seconds = parseFloat(rest);
   return isValidTimeOfDay(Number(hh), Number(mm), seconds);
 }
@@ -109,18 +109,18 @@ function isValidTimeOfDay(h: number, m: number, s: number): boolean {
 
 export function isoToDelphi(value: string, kind: DateFieldKind): number {
   if (kind === "time") {
-    const [h, m, s = "0"] = value.split(":");
+    const [h, m, s = "0"] = value.split(":") as [string, string, string?];
     return timeOfDayToFraction(Number(h), Number(m), parseFloat(s));
   }
 
   if (kind === "date") {
-    const [y, mo, d] = value.split("-").map(Number);
+    const [y, mo, d] = value.split("-").map(Number) as [number, number, number];
     return daysSinceDelphiEpoch(y, mo, d);
   }
 
-  const [datePart, timePart] = value.split("T");
-  const [y, mo, d] = datePart.split("-").map(Number);
-  const [h, m, rest = "0"] = timePart.split(":");
+  const [datePart, timePart] = value.split("T") as [string, string];
+  const [y, mo, d] = datePart.split("-").map(Number) as [number, number, number];
+  const [h, m, rest = "0"] = timePart.split(":") as [string, string, string?];
   const days = daysSinceDelphiEpoch(y, mo, d);
   const frac = timeOfDayToFraction(Number(h), Number(m), parseFloat(rest));
   return days + frac;
