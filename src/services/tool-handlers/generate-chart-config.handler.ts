@@ -64,7 +64,7 @@ export async function handleGenerateChartConfig(params: {
     openAiItems.push({
         type: "message",
         role: "developer",
-        content: developerMessage,
+        content: "Requesting chart config generation.",
     });
 
     const finalInput: ResponseInputItem[] = [
@@ -87,7 +87,7 @@ export async function handleGenerateChartConfig(params: {
         openAiItems.push({
             type: "message",
             role: "assistant",
-            content: JSON.stringify(parsed),
+            content: "Generated chart config.",
         });
 
         logger.toolResult("chart_config", {
